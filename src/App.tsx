@@ -137,14 +137,14 @@ export function App() {
       <main className="max-w-4xl mx-auto px-6 py-12 flex flex-col items-center text-center">
         <div className="inline-flex items-center space-x-2 bg-emerald-50 text-[#15803D] border border-emerald-200 px-4 py-1.5 rounded-full text-xs font-bold mb-6">
           <Sparkles className="w-3.5 h-3.5 text-[#1DB954]" />
-          <span>Hệ thống thi chuẩn Bộ GD&ĐT 2025 • Tự động chống mất bài khi reload</span>
+          <span>Hi</span>
         </div>
 
         <h1 className="text-4xl md:text-5xl font-extrabold text-gray-950 tracking-tight max-w-2xl leading-tight">
           Luyện đề và thi trực tuyến tinh gọn, chuẩn xác.
         </h1>
         <p className="text-sm md:text-base text-gray-500 mt-4 max-w-xl">
-          Màn hình chia đôi đọc đề PDF và điền phiếu thi phong cách Spotify. Vào thi ngay chỉ với Họ tên & Lớp, bảo lưu bài làm tự động khi tải lại trang.
+          Vào thi ngay chỉ với Họ tên & Lớp.
         </p>
 
         {/* FORM THÍ SINH VÀO THI */}
@@ -207,7 +207,7 @@ export function App() {
 
       {/* FOOTER */}
       <footer className="h-16 border-t border-gray-100 flex items-center justify-center text-xs text-gray-400">
-        Phát triển theo quy chuẩn đề thi khảo sát và tốt nghiệp THPT năm 2025 - 2026.
+        Phát triển theo quy chuẩn đề thi khảo sát và tốt nghiệp THPT từ năm 2025.
       </footer>
 
     </div>
