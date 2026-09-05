@@ -119,8 +119,8 @@ export function App() {
             <GraduationCap className="w-6 h-6" />
           </div>
           <div>
-            <span className="font-extrabold text-xl tracking-tight">KhaoThi<span className="text-[#1DB954]">Pro</span></span>
-            <span className="text-[10px] block font-semibold text-gray-400 -mt-1 uppercase tracking-wider">THPT Quốc Gia 2025</span>
+            <span className="font-extrabold text-xl tracking-tight">Yuh<span className="text-[#1DB954]">Quiz</span></span>
+            <span className="text-[10px] block font-semibold text-gray-400 -mt-1 uppercase tracking-wider">THPT Quốc Gia</span>
           </div>
         </div>
 
