@@ -13,6 +13,7 @@ import { ExamCardSelector } from './components/ExamCardSelector';
 import { AuthModal } from './components/AuthModal';
 import { CompleteProfileModal } from './components/CompleteProfileModal';
 import { Exam } from './types/exam';
+import { FloatingBubbles } from './components/FloatingBubbles';
 
 export function App() {
   const [mode, setMode] = useState<'home' | 'student_exam' | 'teacher' | 'student_portal'>('home');
@@ -285,14 +286,16 @@ export function App() {
           </div>
         </div>
 
-        {/* 1. THANH ĐIỀU HƯỚNG TRÊN DESKTOP (>= md) */}
-        <div className="hidden md:flex items-center space-x-3">
-          <div className="flex items-center space-x-1 bg-gray-100/90 p-1 rounded-xl border border-gray-200 text-xs shadow-2xs" title="Cỡ chữ trang web">
+        {/* CỤM ĐIỀU KHIỂN ĐỒNG NHẤT: MENU BAR THẢ XUỐNG DẠNG NÚT = / ☰ CHO CẢ PC VÀ ĐIỆN THOẠI */}
+        <div className="flex items-center space-x-3 relative">
+          
+          {/* PHÍM CỠ CHỮ NHANH TRÊN DESKTOP */}
+          <div className="hidden lg:flex items-center space-x-1 bg-gray-100/90 p-1 rounded-xl border border-gray-200 text-xs shadow-2xs" title="Cỡ chữ trang web">
             <button
               type="button"
               onClick={() => handleFontZoom(-5)}
               disabled={fontZoom <= 85}
-              className="w-6 h-6 rounded-lg hover:bg-white flex items-center justify-center font-bold text-gray-700 disabled:opacity-30 transition-all"
+              className="w-6 h-6 rounded-lg hover:bg-white flex items-center justify-center font-bold text-gray-700 disabled:opacity-30 transition-all cursor-pointer"
               title="Giảm cỡ chữ (Tối thiểu 85%)"
             >
               A-
@@ -304,184 +307,171 @@ export function App() {
               type="button"
               onClick={() => handleFontZoom(5)}
               disabled={fontZoom >= 120}
-              className="w-6 h-6 rounded-lg hover:bg-white flex items-center justify-center font-bold text-gray-700 disabled:opacity-30 transition-all"
+              className="w-6 h-6 rounded-lg hover:bg-white flex items-center justify-center font-bold text-gray-700 disabled:opacity-30 transition-all cursor-pointer"
               title="Tăng cỡ chữ (Tối đa 120%)"
             >
               A+
             </button>
           </div>
 
-          {currentUser ? (
-            <div className="flex items-center space-x-2">
-              {userProfile?.role === 'teacher' ? (
-                <button
-                  onClick={() => setMode('teacher')}
-                  className="flex items-center space-x-2 bg-[#1DB954] hover:bg-[#169C46] text-white px-5 py-2.5 rounded-full font-extrabold text-xs shadow-md shadow-emerald-500/25 transition-all active:scale-95 whitespace-nowrap"
-                >
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>TRUNG TÂM QUẢN TRỊ GV</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              ) : (
-                <button
-                  onClick={() => setMode('student_portal')}
-                  className="flex items-center space-x-2 bg-[#1DB954] hover:bg-[#169C46] text-white px-5 py-2.5 rounded-full font-extrabold text-xs shadow-md shadow-emerald-500/25 transition-all active:scale-95 whitespace-nowrap"
-                >
-                  <GraduationCap className="w-4 h-4" />
-                  <span>GÓC HỌC TẬP CỦA BẠN</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              )}
-
-              <button
-                onClick={handleLogout}
-                className="p-2.5 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 transition-all"
-                title="Đăng xuất"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setIsAuthModalOpen(true)}
-              className="flex items-center space-x-2 text-xs font-bold text-gray-700 hover:text-black bg-white border border-gray-200 hover:border-gray-300 px-5 py-2.5 rounded-full transition-all shadow-sm active:scale-95 whitespace-nowrap"
-            >
-              <LogIn className="w-4 h-4 text-[#1DB954]" />
-              <span>Đăng nhập / Đăng ký</span>
-            </button>
-          )}
-        </div>
-
-        {/* 2. NÚT HAMBURGER MENU TRÊN MOBILE (< md) */}
-        <div className="md:hidden flex items-center space-x-2">
-          <button
-            type="button"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="w-10 h-10 rounded-2xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-800 transition-all shadow-xs"
-            title="Menu ứng dụng"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* 3. MENU THẢ XUỐNG TRÊN MOBILE (DROPDOWN DRAWER) */}
-        {isMobileMenuOpen && (
-          <div className="md:hidden absolute top-20 left-4 right-4 bg-white/98 backdrop-blur-md border border-gray-200 rounded-3xl shadow-2xl p-4 z-50 animate-in fade-in space-y-3">
+          {/* NÚT MENU BAR DẠNG NÚT = / ☰ (HIỆN DIỆN 100% TRÊN MỌI MÀN HÌNH) */}
+          <div className="relative">
             {currentUser ? (
-              <div className="space-y-3">
-                <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-2xl border border-gray-200">
-                  <div className="w-10 h-10 rounded-xl bg-[#1DB954] text-white font-extrabold text-base flex items-center justify-center shadow-xs">
-                    {userProfile?.full_name?.charAt(0).toUpperCase() || 'U'}
-                  </div>
-                  <div className="overflow-hidden">
-                    <span className="font-extrabold text-sm text-gray-900 truncate block">
-                      {userProfile?.full_name || currentUser.email}
-                    </span>
-                    <span className="text-[10px] font-bold text-[#15803D] bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                      {userProfile?.role === 'teacher' ? '👨‍🏫 Giáo viên' : '🎓 Học sinh'}
-                    </span>
-                  </div>
+              <button
+                type="button"
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="flex items-center space-x-2 bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 p-1.5 sm:px-3 sm:py-2 rounded-2xl transition-all shadow-xs cursor-pointer select-none"
+                title="Bấm để mở Menu chức năng"
+              >
+                <div className="w-8 h-8 rounded-xl bg-[#1DB954] text-white flex items-center justify-center font-extrabold text-xs shadow-xs flex-shrink-0">
+                  {userProfile?.full_name?.charAt(0).toUpperCase() || 'U'}
                 </div>
-
-                {userProfile?.role === 'teacher' ? (
-                  <button
-                    onClick={() => {
-                      setMode('teacher');
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className="w-full py-3 px-4 rounded-xl bg-[#1DB954] text-white font-extrabold text-xs flex items-center justify-between shadow-sm"
-                  >
-                    <span className="flex items-center space-x-2">
-                      <ShieldCheck className="w-4 h-4" />
-                      <span>TRUNG TÂM QUẢN TRỊ GV</span>
-                    </span>
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => {
-                      setMode('student_portal');
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className="w-full py-3 px-4 rounded-xl bg-[#1DB954] text-white font-extrabold text-xs flex items-center justify-between shadow-sm"
-                  >
-                    <span className="flex items-center space-x-2">
-                      <GraduationCap className="w-4 h-4" />
-                      <span>GÓC HỌC TẬP CỦA BẠN</span>
-                    </span>
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                )}
-
-                <div className="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl border border-gray-200 text-xs">
-                  <span className="text-gray-600 font-bold">Cỡ chữ trang:</span>
-                  <div className="flex items-center space-x-1.5">
-                    <button
-                      onClick={() => handleFontZoom(-5)}
-                      disabled={fontZoom <= 85}
-                      className="w-7 h-7 rounded-lg bg-white border border-gray-200 font-bold"
-                    >
-                      A-
-                    </button>
-                    <span className="font-mono text-xs font-bold px-1.5">{fontZoom}%</span>
-                    <button
-                      onClick={() => handleFontZoom(5)}
-                      disabled={fontZoom >= 120}
-                      className="w-7 h-7 rounded-lg bg-white border border-gray-200 font-bold"
-                    >
-                      A+
-                    </button>
-                  </div>
+                <div className="text-left hidden sm:block max-w-[140px] truncate">
+                  <span className="font-extrabold text-xs text-gray-900 block truncate leading-tight">
+                    {userProfile?.full_name || currentUser.email?.split('@')[0]}
+                  </span>
+                  <span className="text-[10px] text-gray-400 font-semibold block truncate">
+                    {userProfile?.role === 'teacher' ? '👨‍🏫 Giáo viên' : '🎓 Học sinh'}
+                  </span>
                 </div>
-
-                <button
-                  onClick={() => {
-                    handleLogout();
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className="w-full py-2.5 text-center text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-xl border border-rose-200 transition-all flex items-center justify-center space-x-1.5"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span>Đăng xuất tài khoản</span>
-                </button>
-              </div>
+                <div className="w-8 h-8 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-700 ml-1 flex-shrink-0">
+                  <Menu className="w-4 h-4" />
+                </div>
+              </button>
             ) : (
-              <div className="space-y-2.5">
-                <button
-                  onClick={() => {
-                    setIsAuthModalOpen(true);
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className="w-full py-3 px-4 rounded-xl bg-[#1DB954] text-white font-extrabold text-xs flex items-center justify-center space-x-2 shadow-sm"
-                >
-                  <LogIn className="w-4 h-4" />
-                  <span>Đăng nhập / Đăng ký</span>
-                </button>
+              <button
+                type="button"
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="flex items-center space-x-2 bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 px-4 py-2.5 rounded-2xl transition-all shadow-xs cursor-pointer select-none font-bold text-xs text-gray-800"
+                title="Menu"
+              >
+                <Menu className="w-4 h-4 text-gray-700" />
+                <span>Menu</span>
+              </button>
+            )}
 
-                <div className="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl border border-gray-200 text-xs">
-                  <span className="text-gray-600 font-bold">Cỡ chữ trang:</span>
-                  <div className="flex items-center space-x-1.5">
+            {/* DROPDOWN MENU THẢ XUỐNG CHUẨN XÁC KHI CLICK (HIỂN THỊ TRÊN CẢ PC VÀ MOBILE) */}
+            {isMobileMenuOpen && (
+              <div className="absolute top-14 right-0 w-72 sm:w-80 bg-white/98 backdrop-blur-md border border-gray-200 rounded-3xl shadow-2xl p-4 z-50 animate-in fade-in space-y-3">
+                {currentUser ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-2xl border border-gray-200">
+                      <div className="w-10 h-10 rounded-xl bg-[#1DB954] text-white font-extrabold text-base flex items-center justify-center shadow-xs">
+                        {userProfile?.full_name?.charAt(0).toUpperCase() || 'U'}
+                      </div>
+                      <div className="overflow-hidden">
+                        <span className="font-extrabold text-sm text-gray-900 truncate block">
+                          {userProfile?.full_name || currentUser.email}
+                        </span>
+                        <span className="text-[10px] font-bold text-[#15803D] bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                          {userProfile?.role === 'teacher' ? '👨‍🏫 Giáo viên' : '🎓 Học sinh'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {userProfile?.role === 'teacher' ? (
+                      <button
+                        onClick={() => {
+                          setMode('teacher');
+                          setIsMobileMenuOpen(false);
+                        }}
+                        className="w-full py-3 px-4 rounded-xl bg-[#1DB954] hover:bg-[#169C46] text-white font-extrabold text-xs flex items-center justify-between shadow-sm transition-all"
+                      >
+                        <span className="flex items-center space-x-2">
+                          <ShieldCheck className="w-4 h-4" />
+                          <span>TRUNG TÂM QUẢN TRỊ GV</span>
+                        </span>
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setMode('student_portal');
+                          setIsMobileMenuOpen(false);
+                        }}
+                        className="w-full py-3 px-4 rounded-xl bg-[#1DB954] hover:bg-[#169C46] text-white font-extrabold text-xs flex items-center justify-between shadow-sm transition-all"
+                      >
+                        <span className="flex items-center space-x-2">
+                          <GraduationCap className="w-4 h-4" />
+                          <span>GÓC HỌC TẬP CỦA BẠN</span>
+                        </span>
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    )}
+
+                    <div className="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl border border-gray-200 text-xs">
+                      <span className="text-gray-600 font-bold">Cỡ chữ trang:</span>
+                      <div className="flex items-center space-x-1.5">
+                        <button
+                          onClick={() => handleFontZoom(-5)}
+                          disabled={fontZoom <= 85}
+                          className="w-7 h-7 rounded-lg bg-white border border-gray-200 font-bold hover:bg-gray-100"
+                        >
+                          A-
+                        </button>
+                        <span className="font-mono text-xs font-bold px-1.5">{fontZoom}%</span>
+                        <button
+                          onClick={() => handleFontZoom(5)}
+                          disabled={fontZoom >= 120}
+                          className="w-7 h-7 rounded-lg bg-white border border-gray-200 font-bold hover:bg-gray-100"
+                        >
+                          A+
+                        </button>
+                      </div>
+                    </div>
+
                     <button
-                      onClick={() => handleFontZoom(-5)}
-                      disabled={fontZoom <= 85}
-                      className="w-7 h-7 rounded-lg bg-white border border-gray-200 font-bold"
+                      onClick={() => {
+                        handleLogout();
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className="w-full py-2.5 text-center text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-xl border border-rose-200 transition-all flex items-center justify-center space-x-1.5 cursor-pointer"
                     >
-                      A-
-                    </button>
-                    <span className="font-mono text-xs font-bold px-1.5">{fontZoom}%</span>
-                    <button
-                      onClick={() => handleFontZoom(5)}
-                      disabled={fontZoom >= 120}
-                      className="w-7 h-7 rounded-lg bg-white border border-gray-200 font-bold"
-                    >
-                      A+
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Đăng xuất tài khoản</span>
                     </button>
                   </div>
-                </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    <button
+                      onClick={() => {
+                        setIsAuthModalOpen(true);
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className="w-full py-3 px-4 rounded-xl bg-[#1DB954] hover:bg-[#169C46] text-white font-extrabold text-xs flex items-center justify-center space-x-2 shadow-sm transition-all"
+                    >
+                      <LogIn className="w-4 h-4" />
+                      <span>Đăng nhập / Đăng ký</span>
+                    </button>
+
+                    <div className="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl border border-gray-200 text-xs">
+                      <span className="text-gray-600 font-bold">Cỡ chữ trang:</span>
+                      <div className="flex items-center space-x-1.5">
+                        <button
+                          onClick={() => handleFontZoom(-5)}
+                          disabled={fontZoom <= 85}
+                          className="w-7 h-7 rounded-lg bg-white border border-gray-200 font-bold hover:bg-gray-100"
+                        >
+                          A-
+                        </button>
+                        <span className="font-mono text-xs font-bold px-1.5">{fontZoom}%</span>
+                        <button
+                          onClick={() => handleFontZoom(5)}
+                          disabled={fontZoom >= 120}
+                          className="w-7 h-7 rounded-lg bg-white border border-gray-200 font-bold hover:bg-gray-100"
+                        >
+                          A+
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
-        )}
+
+        </div>
+
       </nav>
 
       {/* HERO & VÀO PHÒNG THI (TỰ ĐỘNG THÍCH ỨNG & BIẾN THIÊN THEO MỌI TỶ LỆ MÀN HÌNH) */}

@@ -334,8 +334,8 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-[#FAFAFA] text-[#121212] font-sans antialiased select-none overflow-hidden">
-      
+    <div className="flex flex-col h-screen w-screen bg-[#FAFAFA] text-[#121212] font-sans antialiased select-none overflow-hidden relative">
+            
       {/* 1. TOP HEADER (ĐƯỢC TỐI ƯU RESPONSIVE CHỐNG CHÈN CHỮ VÀ VỠ BỐ CỤC TRÊN MOBILE) */}
       <header className="h-14 md:h-16 bg-white border-b border-[#EAEAEA] px-2.5 md:px-6 flex items-center justify-between shadow-xs z-30 flex-shrink-0">
         <div className="flex items-center space-x-2 md:space-x-3 overflow-hidden">
@@ -1030,28 +1030,28 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
                                   </span>
                                 )}
 
-                                <div className="inline-flex rounded-xl p-0.5 bg-gray-100 border border-gray-200/60 space-x-1">
+                                <div className="inline-flex rounded-2xl p-1 bg-gray-100 border border-gray-200/80 space-x-1.5 shadow-2xs">
                                   <button
                                     disabled={isSubmitted}
                                     onClick={() => updateAnswer('part_2', qIdx, true, sub)}
-                                    className={`min-w-[44px] md:min-w-[50px] h-7 md:h-8 text-xs font-bold rounded-lg transition-all active:scale-95 ${
+                                    className={`min-w-[65px] md:min-w-[75px] h-9 md:h-10 text-xs md:text-sm font-black rounded-xl transition-all active:scale-95 flex items-center justify-center space-x-1 ${
                                       val === true 
-                                        ? (isSubmitted && !isCorrect ? 'bg-rose-500 text-white' : 'bg-[#1DB954] text-white shadow-sm')
-                                        : (isSubmitted && correctVal === true ? 'border border-[#1DB954] text-[#1DB954] bg-emerald-50' : 'text-gray-600 hover:text-black hover:bg-white/60')
+                                        ? (isSubmitted && !isCorrect ? 'bg-rose-500 text-white' : 'bg-[#1DB954] text-white shadow-md ring-2 ring-emerald-300')
+                                        : (isSubmitted && correctVal === true ? 'border-2 border-[#1DB954] text-[#1DB954] bg-emerald-50 font-bold' : 'text-gray-600 hover:text-black hover:bg-white/80 font-bold')
                                     }`}
                                   >
-                                    Đúng
+                                    <span>Đúng</span>
                                   </button>
                                   <button
                                     disabled={isSubmitted}
                                     onClick={() => updateAnswer('part_2', qIdx, false, sub)}
-                                    className={`min-w-[44px] md:min-w-[50px] h-7 md:h-8 text-xs font-bold rounded-lg transition-all active:scale-95 ${
+                                    className={`min-w-[65px] md:min-w-[75px] h-9 md:h-10 text-xs md:text-sm font-black rounded-xl transition-all active:scale-95 flex items-center justify-center space-x-1 ${
                                       val === false 
-                                        ? (isSubmitted && !isCorrect ? 'bg-rose-500 text-white' : 'bg-[#1DB954] text-white shadow-sm')
-                                        : (isSubmitted && correctVal === false ? 'border border-[#1DB954] text-[#1DB954] bg-emerald-50' : 'text-gray-600 hover:text-black hover:bg-white/60')
+                                        ? (isSubmitted && !isCorrect ? 'bg-rose-500 text-white' : 'bg-rose-500 text-white shadow-md ring-2 ring-rose-300')
+                                        : (isSubmitted && correctVal === false ? 'border-2 border-rose-500 text-rose-600 bg-rose-50 font-bold' : 'text-gray-600 hover:text-black hover:bg-white/80 font-bold')
                                     }`}
                                   >
-                                    Sai
+                                    <span>Sai</span>
                                   </button>
                                 </div>
                               </div>
