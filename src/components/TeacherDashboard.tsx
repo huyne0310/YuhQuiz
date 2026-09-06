@@ -450,16 +450,16 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                   >
                     <div className="flex justify-between items-start">
                       <div className="flex items-center space-x-1.5">
-                        <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${badgeClass}`}>
+                        <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border whitespace-nowrap flex-shrink-0 ${badgeClass}`}>
                           {exam.subject}
                         </span>
                         {exam.is_private && (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 whitespace-nowrap flex-shrink-0">
                             Lớp riêng
                           </span>
                         )}
                       </div>
-                      <span className="text-xs text-gray-400 font-mono">{exam.duration_minutes} phút</span>
+                      <span className="text-xs text-gray-400 font-mono whitespace-nowrap flex-shrink-0">{exam.duration_minutes} phút</span>
                     </div>
 
                     <h3 className="font-bold text-sm text-gray-900 mt-2 pr-4 leading-snug">{exam.title}</h3>

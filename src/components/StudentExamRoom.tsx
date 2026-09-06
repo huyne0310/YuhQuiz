@@ -3,7 +3,8 @@ import {
   Clock, AlertTriangle, Send, CheckCircle2, XCircle, 
   GripVertical, Award, User, RefreshCw, ArrowLeft, 
   FileText, CheckSquare, ChevronUp, ChevronDown, 
-  ZoomIn, ZoomOut, Maximize2, Minimize2, Type 
+  ZoomIn, ZoomOut, Maximize2, Minimize2, Type, 
+  ChevronLeft, ChevronRight, LayoutGrid, Check 
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useExamTimer } from '../hooks/useExamTimer';
@@ -56,12 +57,15 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
   useEffect(() => {
     document.documentElement.style.fontSize = `${(fontZoom / 100) * 16}px`;
     return () => {
-      document.documentElement.style.fontSize = '16px'; // Trả về chuẩn khi thoát
+      document.documentElement.style.fontSize = '16px';
     };
   }, [fontZoom]);
 
-  // 4. Quản lý xem trên Mobile
+  // 4. Quản lý xem trên Mobile: Chế độ Thanh khoanh nhanh (Quick Dock) & Ngăn kéo ma trận câu hỏi
   const [isMobileSheetOpen, setIsMobileSheetOpen] = useState<boolean>(false);
+  const [isMobileGridOpen, setIsMobileGridOpen] = useState<boolean>(false);
+  const [activeMobileQuestion, setActiveMobileQuestion] = useState<number>(1);
+  const [activePart2Sub, setActivePart2Sub] = useState<'a' | 'b' | 'c' | 'd'>('a');
   const [useGoogleViewer, setUseGoogleViewer] = useState<boolean>(true);
 
   // Khởi tạo token phiên thi an toàn tuyệt đối
@@ -308,6 +312,19 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
     return count;
   };
 
+  // Hàm chuyển đổi số thứ tự câu toàn bài (1 .. totalQuestions) sang phần tương ứng
+  const getQuestionMeta = (qNum: number) => {
+    if (qNum <= p1Count) {
+      return { part: 'part_1', subIndex: qNum, partTitle: 'Phần I' };
+    } else if (qNum <= p1Count + p2Count) {
+      return { part: 'part_2', subIndex: qNum - p1Count, partTitle: 'Phần II' };
+    } else {
+      return { part: 'part_3', subIndex: qNum - p1Count - p2Count, partTitle: 'Phần III' };
+    }
+  };
+
+  const currentQMeta = getQuestionMeta(activeMobileQuestion);
+
   const getPdfEmbedUrl = () => {
     if (!exam?.pdf_url) return '';
     if (useGoogleViewer) {
@@ -319,44 +336,42 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
   return (
     <div className="flex flex-col h-screen w-screen bg-[#FAFAFA] text-[#121212] font-sans antialiased select-none overflow-hidden">
       
-      {/* 1. TOP HEADER */}
-      <header className="h-14 md:h-16 bg-white border-b border-[#EAEAEA] px-3 md:px-6 flex items-center justify-between shadow-sm z-30 flex-shrink-0">
-        <div className="flex items-center space-x-2.5">
+      {/* 1. TOP HEADER (ĐƯỢC TỐI ƯU RESPONSIVE CHỐNG CHÈN CHỮ VÀ VỠ BỐ CỤC TRÊN MOBILE) */}
+      <header className="h-14 md:h-16 bg-white border-b border-[#EAEAEA] px-2.5 md:px-6 flex items-center justify-between shadow-xs z-30 flex-shrink-0">
+        <div className="flex items-center space-x-2 md:space-x-3 overflow-hidden">
           <button 
             onClick={handleBackClick}
-            className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-all flex-shrink-0"
+            className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-all flex-shrink-0"
             title="Quay lại (Tự động nộp bài)"
           >
             <ArrowLeft className="w-4 h-4 text-gray-700" />
           </button>
           
-          <div className="flex items-center space-x-2">
-            <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-[#1DB954] flex items-center justify-center text-white font-extrabold text-[11px] shadow-sm flex-shrink-0">
+          <div className="flex items-center space-x-2 overflow-hidden">
+            <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-[#1DB954] flex items-center justify-center text-white font-extrabold text-[10px] md:text-[11px] shadow-sm flex-shrink-0">
               {exam?.subject ? exam.subject.slice(0, 2).toUpperCase() : 'EX'}
             </div>
-            <div>
-              <h1 className="font-bold text-xs md:text-sm text-gray-900 truncate max-w-[120px] sm:max-w-[180px] md:max-w-xs leading-tight">
+            <div className="overflow-hidden">
+              <h1 className="font-extrabold text-xs md:text-sm text-gray-900 truncate max-w-[110px] sm:max-w-[180px] md:max-w-xs leading-tight">
                 {exam?.title}
               </h1>
-              <div className="flex items-center space-x-1.5 text-[10px] md:text-[11px] text-gray-500">
-                <span className="font-semibold text-gray-800">{studentName}</span>
+              <div className="flex items-center space-x-1.5 text-[10px] md:text-[11px] text-gray-500 truncate">
+                <span className="font-semibold text-gray-800 truncate max-w-[80px] sm:max-w-none">{studentName}</span>
                 <span>({className})</span>
-                <span>•</span>
-                <span className="text-gray-400">Giao bởi: {exam?.teacher_name || 'GV'}</span>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center space-x-2 md:space-x-3">
-          {/* THANH TÙY CHỈNH CỠ CHỮ TRANG WEB TRỰC QUAN TRÊN THANH HEADER (85% - 120%) */}
-          <div className="flex items-center space-x-1 bg-gray-100/90 p-1 rounded-xl border border-gray-200 text-xs shadow-2xs" title="Cỡ chữ trang web">
+        <div className="flex items-center space-x-1.5 md:space-x-3 flex-shrink-0">
+          {/* THANH TÙY CHỈNH CỠ CHỮ TRANG WEB TRÊN HEADER (ẨN TRÊN MÀN HÌNH QUÁ NHỎ ĐỂ CHỐNG VỠ BỐ CỤC) */}
+          <div className="hidden sm:flex items-center space-x-1 bg-gray-100/90 p-1 rounded-xl border border-gray-200 text-xs shadow-2xs" title="Cỡ chữ trang web">
             <button
               type="button"
               onClick={() => handleFontZoom(-5)}
               disabled={fontZoom <= 85}
               className="w-6 h-6 rounded-lg hover:bg-white flex items-center justify-center font-bold text-gray-700 disabled:opacity-30 transition-all"
-              title="Giảm cỡ chữ trang web (Min: 85%)"
+              title="Giảm cỡ chữ trang web"
             >
               A-
             </button>
@@ -368,28 +383,29 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
               onClick={() => handleFontZoom(5)}
               disabled={fontZoom >= 120}
               className="w-6 h-6 rounded-lg hover:bg-white flex items-center justify-center font-bold text-gray-700 disabled:opacity-30 transition-all"
-              title="Tăng cỡ chữ trang web (Max: 120%)"
+              title="Tăng cỡ chữ trang web"
             >
               A+
             </button>
           </div>
 
-          {/* HIỂN THỊ VI PHẠM (CHỈ CẢNH BÁO KHI ĐANG THI, TẮT HOÀN TOÀN KHI ĐÃ NỘP) */}
+          {/* CẢNH BÁO RỜI TAB (CHỈ BẬT KHI ĐANG THI, TẮT HOÀN TOÀN KHI ĐÃ NỘP BÀI) */}
           {!isSubmitted ? (
             cheatCount > 0 && (
-              <div className="hidden sm:flex items-center space-x-1 bg-amber-50 text-amber-800 px-2.5 py-1 rounded-full text-xs font-semibold border border-amber-200">
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+              <div className="hidden md:flex items-center space-x-1 bg-amber-50 text-amber-800 px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-200">
+                <AlertTriangle className="w-3 h-3 text-amber-500" />
                 <span>Rời tab: {cheatCount}</span>
               </div>
             )
           ) : (
-            <div className="hidden sm:flex items-center space-x-1 bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full text-xs font-medium">
+            <div className="hidden md:flex items-center space-x-1 bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-[10px] font-medium">
               <span>Rời tab khi thi: {cheatCount} lần</span>
             </div>
           )}
 
+          {/* ĐỒNG HỒ ĐẾM NGƯỢC */}
           {!isSubmitted ? (
-            <div className={`flex items-center space-x-1.5 px-2.5 md:px-3 py-1 md:py-1.5 rounded-full font-mono font-bold text-xs md:text-sm tracking-wider ${
+            <div className={`flex items-center space-x-1 px-2 md:px-3 py-1 rounded-full font-mono font-bold text-xs md:text-sm tracking-wider ${
               timeLeft < 300 
                 ? 'bg-rose-50 text-rose-600 border border-rose-200 animate-pulse' 
                 : 'bg-gray-100 text-gray-800'
@@ -398,12 +414,13 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
               <span>{formatTimer(timeLeft)}</span>
             </div>
           ) : (
-            <div className="flex items-center space-x-1.5 bg-gray-100 text-gray-700 px-2.5 py-1 rounded-full font-bold text-xs">
-              <CheckCircle2 className="w-4 h-4 text-[#1DB954]" />
-              <span>Đã hoàn thành</span>
+            <div className="flex items-center space-x-1 bg-gray-100 text-gray-700 px-2 py-1 rounded-full font-bold text-xs">
+              <CheckCircle2 className="w-3.5 h-3.5 text-[#1DB954]" />
+              <span className="hidden sm:inline">Đã hoàn thành</span>
             </div>
           )}
 
+          {/* NÚT NỘP BÀI / ĐIỂM SỐ */}
           {!isSubmitted ? (
             <button
               onClick={() => {
@@ -412,15 +429,15 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
                 }
               }}
               disabled={isSubmitting}
-              className="flex items-center space-x-1.5 bg-[#1DB954] hover:bg-[#169C46] active:scale-95 text-white px-3.5 md:px-4 py-1.5 md:py-2 rounded-full font-bold text-xs md:text-sm transition-all shadow-sm flex-shrink-0"
+              className="flex items-center space-x-1 bg-[#1DB954] hover:bg-[#169C46] active:scale-95 text-white px-3 md:px-4 py-1.5 md:py-2 rounded-full font-bold text-xs md:text-sm transition-all shadow-sm flex-shrink-0"
             >
               {isSubmitting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
               <span>Nộp bài</span>
             </button>
           ) : (
-            <div className="flex items-center space-x-1.5 bg-[#E7F7ED] text-[#15803D] border border-[#A7E6BE] px-3 py-1 rounded-full font-extrabold text-xs md:text-sm flex-shrink-0">
+            <div className="flex items-center space-x-1 bg-[#E7F7ED] text-[#15803D] border border-[#A7E6BE] px-2.5 py-1 rounded-full font-extrabold text-xs md:text-sm flex-shrink-0">
               <Award className="w-3.5 h-3.5 text-[#1DB954]" />
-              <span>{result?.score} / 10đ</span>
+              <span>{result?.score}đ</span>
             </div>
           )}
         </div>
@@ -432,10 +449,10 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
         {/* KHUNG ĐỀ THI PDF CÓ THANH THU PHÓNG ĐỘC LẬP */}
         <div 
           style={{ width: window.innerWidth >= 768 ? (isPdfFullscreen ? '100%' : `${splitRatio}%`) : '100%' }} 
-          className="h-full bg-[#E5E5E5] relative overflow-hidden flex flex-col flex-1 transition-all"
+          className="h-full bg-[#525659] relative overflow-hidden flex flex-col flex-1 transition-all"
         >
-          {/* SUB-HEADER CỦA KHUNG ĐỀ THI PDF: BỔ SUNG BỘ ĐIỀU KHIỂN THU PHÓNG ĐỘC LẬP */}
-          <div className="h-9 bg-gray-100 border-b border-gray-200 px-3 flex items-center justify-between text-[11px] text-gray-600 z-10 flex-shrink-0 flex-wrap gap-2">
+          {/* SUB-HEADER KHUNG ĐỀ THI: CÔNG CỤ ZOOM VÀ ĐỔI VIEWER */}
+          <div className="h-8 md:h-9 bg-gray-100 border-b border-gray-200 px-2 md:px-3 flex items-center justify-between text-[11px] text-gray-600 z-10 flex-shrink-0">
             <span className="flex items-center space-x-1 font-semibold">
               <FileText className="w-3.5 h-3.5 text-gray-500" />
               <span className="hidden sm:inline">Đọc đề trực tiếp</span>
@@ -443,7 +460,6 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
 
             {/* BỘ NÚT THU PHÓNG FILE PDF ĐỘC LẬP (70% - 200%) */}
             <div className="flex items-center space-x-1 bg-white px-2 py-0.5 rounded-lg border border-gray-200 shadow-2xs">
-              <span className="text-[10px] text-gray-400 font-bold uppercase hidden md:inline">Cỡ đề:</span>
               <button
                 type="button"
                 onClick={() => setPdfZoom(prev => Math.max(0.7, parseFloat((prev - 0.15).toFixed(2))))}
@@ -456,7 +472,7 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
               <button
                 type="button"
                 onClick={() => setPdfZoom(1.0)}
-                className="font-mono text-[11px] font-bold text-[#15803D] hover:underline px-1 min-w-[36px] text-center"
+                className="font-mono text-[11px] font-bold text-[#15803D] hover:underline px-1 min-w-[34px] text-center"
                 title="Đặt lại cỡ đề về 100%"
               >
                 {Math.round(pdfZoom * 100)}%
@@ -473,7 +489,7 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
               <button
                 type="button"
                 onClick={() => setIsPdfFullscreen(!isPdfFullscreen)}
-                className="w-5 h-5 rounded hover:bg-gray-100 flex items-center justify-center text-gray-600 ml-1"
+                className="w-5 h-5 rounded hover:bg-gray-100 flex items-center justify-center text-gray-600 ml-1 hidden md:flex"
                 title={isPdfFullscreen ? "Thu nhỏ lại chia đôi màn hình" : "Mở rộng đề toàn màn hình"}
               >
                 {isPdfFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
@@ -485,11 +501,11 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
               className="text-[#1DB954] hover:underline font-semibold flex items-center space-x-1"
             >
               <RefreshCw className="w-3 h-3" />
-              <span className="hidden sm:inline">{useGoogleViewer ? 'Trình đọc gốc' : 'Google Viewer'}</span>
+              <span className="hidden md:inline">{useGoogleViewer ? 'Trình đọc gốc' : 'Google Viewer'}</span>
             </button>
           </div>
 
-          {/* VÙNG CHỨA IFRAME PDF ÁP DỤNG THU PHÓNG THỰC THẾ (CSS TRANSFORM SCALE) */}
+          {/* VÙNG CHỨA IFRAME PDF ÁP DỤNG THU PHÓNG THỰC TẾ (CSS TRANSFORM SCALE) */}
           {exam?.pdf_url ? (
             <div className={`w-full flex-1 relative overflow-auto bg-[#525659] ${isDragging ? 'pointer-events-none select-none' : ''}`}>
               <div 
@@ -550,148 +566,431 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
           />
         )}
 
-        {/* NÚT NỔI DƯỚI ĐÁY MÀN HÌNH DI ĐỘNG */}
-        <div className="md:hidden fixed bottom-4 left-4 right-4 z-40">
-          <button
-            onClick={() => setIsMobileSheetOpen(true)}
-            className="w-full bg-[#121212] hover:bg-black text-white px-5 py-3.5 rounded-2xl font-bold text-xs shadow-2xl flex items-center justify-between border border-white/20 active:scale-95 transition-all"
-          >
-            <div className="flex items-center space-x-2">
-              <span className="w-2 h-2 rounded-full bg-[#1DB954] animate-ping" />
-              <span>Phiếu làm bài (Đã làm: {countAnswered()}/{totalQuestions})</span>
-            </div>
-            <div className="flex items-center space-x-1 text-[#1DB954]">
-              <span>Mở phiếu</span>
-              <ChevronUp className="w-4 h-4" />
-            </div>
-          </button>
-        </div>
-
-        {/* KHUNG PHIẾU LÀM BÀI */}
-        {!isPdfFullscreen && (
-          <div 
-            style={{ width: window.innerWidth >= 768 ? `${100 - splitRatio}%` : '100%' }} 
-            className={`
-              fixed md:relative bottom-0 left-0 right-0 z-50 md:z-20 bg-[#FAFAFA] overflow-y-auto transition-transform duration-300 ease-out shadow-2xl md:shadow-none
-              ${isMobileSheetOpen ? 'translate-y-0 h-[82vh] md:h-full border-t-2 md:border-t-0 border-[#1DB954] rounded-t-3xl md:rounded-none' : 'translate-y-full md:translate-y-0 h-0 md:h-full'}
-              md:block p-4 md:p-6
-            `}
-          >
-            <div className="md:hidden flex items-center justify-between pb-3 border-b border-gray-200 mb-4 sticky top-0 bg-[#FAFAFA] z-20 pt-1">
-              <div className="flex items-center space-x-2">
-                <span className="font-extrabold text-sm text-gray-900">Phiếu làm bài</span>
-                <span className="text-xs font-bold text-gray-500">({countAnswered()}/{totalQuestions} câu)</span>
-              </div>
-              <button
-                onClick={() => setIsMobileSheetOpen(false)}
-                className="flex items-center space-x-1 bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1 rounded-full text-xs font-bold"
-              >
-                <span>Thu gọn</span>
-                <ChevronDown className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            <div className="max-w-2xl mx-auto space-y-6 pb-28">
+        {/* ĐỘT PHÁ UX MOBILE: THANH KHOANH ĐÁP ÁN NHANH CỐ ĐỊNH Ở ĐÁY (QUICK ANSWER DOCK) */}
+        {/* Giúp học sinh đọc đề trọn vẹn toàn màn hình và bấm đáp án bằng ngón tay cái mà không bị che khuất đề */}
+        {!isSubmitted && (
+          <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-gray-200 px-3 py-2 shadow-2xl">
+            <div className="flex items-center justify-between gap-2">
               
-              {/* THẺ ĐIỂM SAU NỘP */}
-              {isSubmitted && (
-                <div className="bg-white border border-[#A7E6BE] rounded-3xl p-5 shadow-sm text-center relative overflow-hidden">
-                  <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#1DB954]" />
-                  <h3 className="text-base font-bold text-[#15803D]">Bạn đã nộp bài thành công!</h3>
-                  <div className="mt-2 flex items-baseline justify-center space-x-1">
-                    <span className="text-3xl md:text-4xl font-extrabold text-[#1DB954]">{result?.score}</span>
-                    <span className="text-xs md:text-sm font-semibold text-gray-500">/ 10.0 điểm</span>
-                  </div>
-                  <p className="text-[11px] text-gray-500 mt-1">
-                    Xem chi tiết đáp án đúng/sai từng câu để đối chiếu ôn tập. Cảm biến chống gian lận đã được tự động tắt.
-                  </p>
+              {/* CỤM ĐIỀU HƯỚNG CÂU HỎI */}
+              <div className="flex items-center space-x-1 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setActiveMobileQuestion(prev => Math.max(1, prev - 1))}
+                  disabled={activeMobileQuestion <= 1}
+                  className="w-8 h-8 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center font-bold text-gray-700 disabled:opacity-30"
+                  title="Câu trước"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <div 
+                  onClick={() => setIsMobileGridOpen(true)}
+                  className="px-2.5 py-1 rounded-xl bg-emerald-50 border border-emerald-200 text-center cursor-pointer"
+                  title="Bấm để mở ma trận câu hỏi"
+                >
+                  <span className="text-[10px] text-[#15803D] block font-extrabold uppercase -mb-0.5">
+                    {currentQMeta.partTitle}
+                  </span>
+                  <span className="text-xs font-black text-gray-900">
+                    Câu {currentQMeta.subIndex}
+                  </span>
                 </div>
-              )}
+                <button
+                  type="button"
+                  onClick={() => setActiveMobileQuestion(prev => Math.min(totalQuestions, prev + 1))}
+                  disabled={activeMobileQuestion >= totalQuestions}
+                  className="w-8 h-8 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center font-bold text-gray-700 disabled:opacity-30"
+                  title="Câu tiếp"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
 
-              {/* PHẦN I */}
-              {p1Count > 0 && (
-                <section className="bg-white border border-[#EAEAEA] rounded-3xl p-4 md:p-5 shadow-sm">
-                  <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
-                    <div>
-                      <h2 className="font-bold text-sm text-gray-900">PHẦN I. Trắc nghiệm 4 lựa chọn</h2>
-                      <p className="text-[11px] text-gray-400">Chọn 1 phương án đúng</p>
-                    </div>
-                    <span className="text-xs bg-gray-100 text-gray-700 px-2.5 py-1 rounded-full font-bold">
-                      {p1Count} câu
-                    </span>
-                  </div>
-
-                  <div className="space-y-3">
-                    {Array.from({ length: p1Count }, (_, i) => i + 1).map((qIdx) => {
-                      const currentChoice = answers?.part_1?.[qIdx];
-                      const qDetail = result?.score_details?.part_1?.[qIdx];
-                      const correctKey = result?.answer_keys?.part_1?.[qIdx];
-
+              {/* KHU VỰC CHỌN ĐÁP ÁN CỦA CÂU ĐANG CHỌN (TỰ ĐỘNG THÍCH ỨNG THEO TỪNG PHẦN) */}
+              <div className="flex-1 flex items-center justify-center px-1">
+                {/* PHẦN I: 4 NÚT TRÒN A, B, C, D BẢN TO DỄ CHẠM */}
+                {currentQMeta.part === 'part_1' && (
+                  <div className="flex space-x-2">
+                    {['A', 'B', 'C', 'D'].map((opt) => {
+                      const isSelected = answers?.part_1?.[currentQMeta.subIndex] === opt;
                       return (
-                        <div key={qIdx} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-none">
-                          <div className="flex items-center space-x-2">
-                            <span className="font-bold text-xs md:text-sm text-gray-800 w-16">Câu {qIdx}:</span>
-                            {isSubmitted && (
-                              qDetail?.is_correct 
-                                ? <span className="inline-flex items-center text-[#1DB954] text-xs font-bold"><CheckCircle2 className="w-4 h-4 mr-1" /> Đúng</span>
-                                : <span className="inline-flex items-center text-rose-500 text-xs font-bold"><XCircle className="w-4 h-4 mr-1" /> Sai (ĐS: {correctKey || '--'})</span>
-                            )}
-                          </div>
-
-                          <div className="flex space-x-2 md:space-x-3">
-                            {['A', 'B', 'C', 'D'].map((opt) => {
-                              const isSelected = currentChoice === opt;
-                              const isKey = isSubmitted && correctKey === opt;
-                              const isWrong = isSubmitted && isSelected && !qDetail?.is_correct;
-
-                              let style = "border-gray-200 text-gray-700 hover:border-gray-400 bg-white active:scale-95";
-                              if (isSelected) style = "bg-[#1DB954] border-[#1DB954] text-white font-bold shadow-sm";
-                              if (isSubmitted) {
-                                if (isKey) style = "bg-[#1DB954] border-[#1DB954] text-white font-bold ring-2 ring-emerald-300";
-                                else if (isWrong) style = "bg-rose-500 border-rose-500 text-white font-bold";
-                                else style = "border-gray-100 text-gray-300 opacity-40 bg-white";
-                              }
-
-                              return (
-                                <button
-                                  key={opt}
-                                  disabled={isSubmitted}
-                                  onClick={() => updateAnswer('part_1', qIdx, opt)}
-                                  className={`w-9 h-9 md:w-10 md:h-10 rounded-full border text-xs md:text-sm font-bold flex items-center justify-center transition-all ${style}`}
-                                >
-                                  {opt}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => {
+                            updateAnswer('part_1', currentQMeta.subIndex, opt);
+                            // Tự động nhảy sang câu tiếp theo sau khi chọn
+                            if (activeMobileQuestion < totalQuestions) {
+                              setActiveMobileQuestion(prev => prev + 1);
+                            }
+                          }}
+                          className={`w-9 h-9 rounded-full border text-xs font-extrabold transition-all active:scale-90 ${
+                            isSelected 
+                              ? 'bg-[#1DB954] border-[#1DB954] text-white shadow-md shadow-emerald-500/30 ring-2 ring-emerald-300' 
+                              : 'bg-gray-50 border-gray-300 text-gray-800 hover:bg-gray-100'
+                          }`}
+                        >
+                          {opt}
+                        </button>
                       );
                     })}
                   </div>
-                </section>
-              )}
+                )}
 
-              {/* PHẦN II */}
-              {p2Count > 0 && (
-                <section className="bg-white border border-[#EAEAEA] rounded-3xl p-4 md:p-5 shadow-sm">
-                  <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
-                    <div>
-                      <h2 className="font-bold text-sm text-gray-900">PHẦN II. Trắc nghiệm Đúng / Sai</h2>
-                      <p className="text-[11px] text-gray-400">4 ý a, b, c, d xếp dọc • Thang lũy tiến 10% - 25% - 50% - 100%</p>
+                {/* PHẦN II: THIẾT KẾ ĐỘT PHÁ TO RÕ, NÚT ĐÚNG / SAI BẢN TO DỄ CHẠM BẰNG NGÓN CÁI */}
+                {currentQMeta.part === 'part_2' && (
+                  <div className="flex flex-col items-center w-full max-w-[240px]">
+                    {/* HÀNG TRÊN: 4 TAB CHỌN Ý a, b, c, d HIỂN THỊ TRẠNG THÁI */}
+                    <div className="flex items-center space-x-1 mb-1">
+                      {(['a', 'b', 'c', 'd'] as const).map((sub) => {
+                        const val = answers?.part_2?.[currentQMeta.subIndex]?.[sub];
+                        const isCurrent = activePart2Sub === sub;
+                        let badgeStyle = 'bg-gray-100 text-gray-600 border-gray-200';
+                        if (val === true) badgeStyle = 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold';
+                        else if (val === false) badgeStyle = 'bg-rose-100 text-rose-800 border-rose-300 font-bold';
+
+                        return (
+                          <button
+                            key={sub}
+                            type="button"
+                            onClick={() => setActivePart2Sub(sub)}
+                            className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold transition-all ${badgeStyle} ${isCurrent ? 'ring-2 ring-[#1DB954] shadow-xs scale-105' : ''}`}
+                          >
+                            {sub.toUpperCase()}: {val === true ? 'Đ' : val === false ? 'S' : '-'}
+                          </button>
+                        );
+                      })}
                     </div>
-                    <span className="text-xs bg-gray-100 text-gray-700 px-2.5 py-1 rounded-full font-bold">
-                      {p2Count} câu
-                    </span>
-                  </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {Array.from({ length: p2Count }, (_, i) => i + 1).map((qIdx) => (
-                      <div key={qIdx} className="bg-[#FAFAFA] p-3.5 md:p-4 rounded-2xl border border-gray-200/80 shadow-xs flex flex-col justify-between">
-                        <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-200/60">
-                          <span className="font-extrabold text-xs md:text-sm text-gray-900">Câu {qIdx}</span>
-                          {isSubmitted ? (
-                            <span className="text-xs font-bold text-[#1DB954]">
-                              +{result?.score_details?.part_2?.[qIdx]?.score || 0}đ ({result?.score_details?.part_2?.[qIdx]?.correct_count || 0}/4 ý đúng)
+                    {/* HÀNG DƯỚI: 2 NÚT ĐÚNG / SAI BẢN TO (40PX TOUCH TARGET) CHỐNG BẤM NHẦM */}
+                    <div className="flex items-center space-x-2">
+                      <span className="font-extrabold text-xs text-gray-700 w-8">
+                        Ý {activePart2Sub.toUpperCase()}:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          updateAnswer('part_2', currentQMeta.subIndex, true, activePart2Sub);
+                          if (activePart2Sub === 'a') setActivePart2Sub('b');
+                          else if (activePart2Sub === 'b') setActivePart2Sub('c');
+                          else if (activePart2Sub === 'c') setActivePart2Sub('d');
+                          else if (activePart2Sub === 'd' && activeMobileQuestion < totalQuestions) {
+                            setActiveMobileQuestion(prev => prev + 1);
+                            setActivePart2Sub('a');
+                          }
+                        }}
+                        className={`h-9 px-4 rounded-xl font-extrabold text-xs transition-all active:scale-90 flex items-center justify-center space-x-1 ${
+                          answers?.part_2?.[currentQMeta.subIndex]?.[activePart2Sub] === true
+                            ? 'bg-[#1DB954] text-white shadow-md ring-2 ring-emerald-300'
+                            : 'bg-emerald-50 text-[#15803D] border border-emerald-300 hover:bg-emerald-100'
+                        }`}
+                      >
+                        <span>ĐÚNG</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          updateAnswer('part_2', currentQMeta.subIndex, false, activePart2Sub);
+                          if (activePart2Sub === 'a') setActivePart2Sub('b');
+                          else if (activePart2Sub === 'b') setActivePart2Sub('c');
+                          else if (activePart2Sub === 'c') setActivePart2Sub('d');
+                          else if (activePart2Sub === 'd' && activeMobileQuestion < totalQuestions) {
+                            setActiveMobileQuestion(prev => prev + 1);
+                            setActivePart2Sub('a');
+                          }
+                        }}
+                        className={`h-9 px-4 rounded-xl font-extrabold text-xs transition-all active:scale-90 flex items-center justify-center space-x-1 ${
+                          answers?.part_2?.[currentQMeta.subIndex]?.[activePart2Sub] === false
+                            ? 'bg-rose-500 text-white shadow-md ring-2 ring-rose-300'
+                            : 'bg-rose-50 text-rose-700 border border-rose-300 hover:bg-rose-100'
+                        }`}
+                      >
+                        <span>SAI</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* PHẦN III: Ô NHẬP SỐ */}
+                {currentQMeta.part === 'part_3' && (
+                  <div className="flex items-center space-x-1 w-full max-w-[170px]">
+                    <input
+                      type="text"
+                      placeholder="Đáp số..."
+                      value={answers?.part_3?.[currentQMeta.subIndex] || ''}
+                      onChange={(e) => updateAnswer('part_3', currentQMeta.subIndex, e.target.value)}
+                      className="w-full text-xs px-2.5 py-1.5 bg-gray-50 border border-gray-300 rounded-xl font-mono text-center font-bold focus:bg-white focus:border-[#1DB954] focus:outline-none"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* NÚT MỞ MA TRẬN / TOÀN BỘ PHIẾU */}
+              <button
+                type="button"
+                onClick={() => setIsMobileGridOpen(true)}
+                className="w-9 h-9 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 flex flex-col items-center justify-center relative flex-shrink-0"
+                title="Mở ma trận câu hỏi"
+              >
+                <LayoutGrid className="w-4 h-4 text-[#1DB954]" />
+                <span className="text-[8px] font-bold text-gray-500">{countAnswered()}/{totalQuestions}</span>
+              </button>
+
+            </div>
+          </div>
+        )}
+
+        {/* MODAL MA TRẬN TẤT CẢ CÂU HỎI TRÊN MOBILE (BẤM LÀ NHẢY NGAY ĐẾN CÂU ĐÓ) */}
+        {isMobileGridOpen && (
+          <div className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end animate-in fade-in duration-200">
+            <div className="bg-white rounded-t-3xl w-full p-4 max-h-[75vh] flex flex-col shadow-2xl">
+              <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+                <div>
+                  <h3 className="font-extrabold text-sm text-gray-900">Ma Trận Câu Hỏi</h3>
+                  <p className="text-[11px] text-gray-400">Đã hoàn thành {countAnswered()}/{totalQuestions} câu</p>
+                </div>
+                <button
+                  onClick={() => setIsMobileGridOpen(false)}
+                  className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center font-bold text-gray-500 text-xs"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* LƯỚI TẤT CẢ CÂU HỎI */}
+              <div className="flex-1 overflow-y-auto py-3 pr-1 space-y-3 text-xs">
+                {p1Count > 0 && (
+                  <div>
+                    <span className="font-bold text-gray-700 text-[11px] block mb-1.5">Phần I (Trắc nghiệm đơn)</span>
+                    <div className="grid grid-cols-6 gap-1.5">
+                      {Array.from({ length: p1Count }, (_, i) => i + 1).map((q) => {
+                        const ans = answers?.part_1?.[q];
+                        const isActive = activeMobileQuestion === q;
+                        return (
+                          <button
+                            key={q}
+                            type="button"
+                            onClick={() => {
+                              setActiveMobileQuestion(q);
+                              setIsMobileGridOpen(false);
+                            }}
+                            className={`p-1.5 rounded-xl border text-center font-bold text-xs transition-all ${
+                              ans ? 'bg-[#1DB954] text-white border-[#1DB954]' : 'bg-gray-50 border-gray-200 text-gray-700'
+                            } ${isActive ? 'ring-2 ring-emerald-400' : ''}`}
+                          >
+                            <span className="block text-[9px] opacity-75">C{q}</span>
+                            <span>{ans || '-'}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {p2Count > 0 && (
+                  <div>
+                    <span className="font-bold text-gray-700 text-[11px] block mb-1.5">Phần II (Đúng/Sai)</span>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {Array.from({ length: p2Count }, (_, i) => i + 1).map((q) => {
+                        const qIndex = p1Count + q;
+                        const subGroup = answers?.part_2?.[q] || {};
+                        const answeredCount = Object.keys(subGroup).length;
+                        const isActive = activeMobileQuestion === qIndex;
+
+                        return (
+                          <button
+                            key={q}
+                            type="button"
+                            onClick={() => {
+                              setActiveMobileQuestion(qIndex);
+                              setIsMobileGridOpen(false);
+                            }}
+                            className={`p-1.5 rounded-xl border text-center font-bold text-xs transition-all ${
+                              answeredCount === 4 ? 'bg-[#1DB954] text-white border-[#1DB954]' : answeredCount > 0 ? 'bg-amber-50 text-amber-800 border-amber-300' : 'bg-gray-50 border-gray-200 text-gray-700'
+                            } ${isActive ? 'ring-2 ring-emerald-400' : ''}`}
+                          >
+                            <span className="block text-[9px] opacity-75">C{q}</span>
+                            <span>{answeredCount}/4 ý</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {p3Count > 0 && (
+                  <div>
+                    <span className="font-bold text-gray-700 text-[11px] block mb-1.5">Phần III (Trả lời ngắn)</span>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {Array.from({ length: p3Count }, (_, i) => i + 1).map((q) => {
+                        const qIndex = p1Count + p2Count + q;
+                        const val = answers?.part_3?.[q];
+                        const isActive = activeMobileQuestion === qIndex;
+
+                        return (
+                          <button
+                            key={q}
+                            type="button"
+                            onClick={() => {
+                              setActiveMobileQuestion(qIndex);
+                              setIsMobileGridOpen(false);
+                            }}
+                            className={`p-1.5 rounded-xl border text-center font-bold text-xs truncate transition-all ${
+                              val ? 'bg-[#1DB954] text-white border-[#1DB954]' : 'bg-gray-50 border-gray-200 text-gray-700'
+                            } ${isActive ? 'ring-2 ring-emerald-400' : ''}`}
+                          >
+                            <span className="block text-[9px] opacity-75">C{q}</span>
+                            <span className="truncate">{val || '-'}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* NÚT MỞ PHIẾU TRUYỀN THỐNG */}
+              <div className="pt-2 border-t border-gray-100 flex space-x-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMobileGridOpen(false);
+                    setIsMobileSheetOpen(true);
+                  }}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 py-2.5 rounded-xl font-bold text-xs text-center"
+                >
+                  Xem toàn bộ phiếu cuộn dọc
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* KHUNG PHIẾU LÀM BÀI TRUYỀN THỐNG (DESKTOP HOẶC MODAL KHI NỘP XONG TRÊN MOBILE) */}
+        <div 
+          style={{ width: window.innerWidth >= 768 ? `${100 - splitRatio}%` : '100%' }} 
+          className={`
+            fixed md:relative bottom-0 left-0 right-0 z-50 md:z-20 bg-[#FAFAFA] overflow-y-auto transition-transform duration-300 ease-out shadow-2xl md:shadow-none
+            ${isMobileSheetOpen ? 'translate-y-0 h-[85vh] md:h-full border-t-2 md:border-t-0 border-[#1DB954] rounded-t-3xl md:rounded-none' : 'translate-y-full md:translate-y-0 h-0 md:h-full'}
+            md:block p-3 md:p-6
+          `}
+        >
+          <div className="md:hidden flex items-center justify-between pb-3 border-b border-gray-200 mb-4 sticky top-0 bg-[#FAFAFA] z-20 pt-1">
+            <div className="flex items-center space-x-2">
+              <span className="font-extrabold text-sm text-gray-900">Phiếu làm bài chi tiết</span>
+              <span className="text-xs font-bold text-gray-500">({countAnswered()}/{totalQuestions} câu)</span>
+            </div>
+            <button
+              onClick={() => setIsMobileSheetOpen(false)}
+              className="flex items-center space-x-1 bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1 rounded-full text-xs font-bold"
+            >
+              <span>Thu gọn</span>
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="max-w-2xl mx-auto space-y-6 pb-28">
+            
+            {/* THẺ ĐIỂM SAU NỘP */}
+            {isSubmitted && (
+              <div className="bg-white border border-[#A7E6BE] rounded-3xl p-5 shadow-sm text-center relative overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#1DB954]" />
+                <h3 className="text-base font-bold text-[#15803D]">Bạn đã nộp bài thành công!</h3>
+                <div className="mt-2 flex items-baseline justify-center space-x-1">
+                  <span className="text-3xl md:text-4xl font-extrabold text-[#1DB954]">{result?.score}</span>
+                  <span className="text-xs md:text-sm font-semibold text-gray-500">/ 10.0 điểm</span>
+                </div>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Xem chi tiết đáp án đúng/sai từng câu để đối chiếu ôn tập. Cảm biến chống gian lận đã được tự động tắt.
+                </p>
+              </div>
+            )}
+
+            {/* PHẦN I */}
+            {p1Count > 0 && (
+              <section className="bg-white border border-[#EAEAEA] rounded-3xl p-4 md:p-5 shadow-sm">
+                <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
+                  <div>
+                    <h2 className="font-bold text-sm text-gray-900">PHẦN I. Trắc nghiệm 4 lựa chọn</h2>
+                    <p className="text-[11px] text-gray-400">Chọn 1 phương án đúng</p>
+                  </div>
+                  <span className="text-xs bg-gray-100 text-gray-700 px-2.5 py-1 rounded-full font-bold">
+                    {p1Count} câu
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {Array.from({ length: p1Count }, (_, i) => i + 1).map((qIdx) => {
+                    const currentChoice = answers?.part_1?.[qIdx];
+                    const qDetail = result?.score_details?.part_1?.[qIdx];
+                    const correctKey = result?.answer_keys?.part_1?.[qIdx];
+
+                    return (
+                      <div key={qIdx} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-none">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-bold text-xs md:text-sm text-gray-800 w-16">Câu {qIdx}:</span>
+                          {isSubmitted && (
+                            qDetail?.is_correct 
+                              ? <span className="inline-flex items-center text-[#1DB954] text-xs font-bold"><CheckCircle2 className="w-4 h-4 mr-1" /> Đúng</span>
+                              : <span className="inline-flex items-center text-rose-500 text-xs font-bold"><XCircle className="w-4 h-4 mr-1" /> Sai (ĐS: {correctKey || '--'})</span>
+                          )}
+                        </div>
+
+                        <div className="flex space-x-2 md:space-x-3">
+                          {['A', 'B', 'C', 'D'].map((opt) => {
+                            const isSelected = currentChoice === opt;
+                            const isKey = isSubmitted && correctKey === opt;
+                            const isWrong = isSubmitted && isSelected && !qDetail?.is_correct;
+
+                            let style = "border-gray-200 text-gray-700 hover:border-gray-400 bg-white active:scale-95";
+                            if (isSelected) style = "bg-[#1DB954] border-[#1DB954] text-white font-bold shadow-sm";
+                            if (isSubmitted) {
+                              if (isKey) style = "bg-[#1DB954] border-[#1DB954] text-white font-bold ring-2 ring-emerald-300";
+                              else if (isWrong) style = "bg-rose-500 border-rose-500 text-white font-bold";
+                              else style = "border-gray-100 text-gray-300 opacity-40 bg-white";
+                            }
+
+                            return (
+                              <button
+                                key={opt}
+                                disabled={isSubmitted}
+                                onClick={() => updateAnswer('part_1', qIdx, opt)}
+                                className={`w-8 h-8 md:w-10 md:h-10 rounded-full border text-xs md:text-sm font-bold flex items-center justify-center transition-all ${style}`}
+                              >
+                                {opt}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {/* PHẦN II */}
+            {p2Count > 0 && (
+              <section className="bg-white border border-[#EAEAEA] rounded-3xl p-4 md:p-5 shadow-sm">
+                <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
+                  <div>
+                    <h2 className="font-bold text-sm text-gray-900">PHẦN II. Trắc nghiệm Đúng / Sai</h2>
+                    <p className="text-[11px] text-gray-400">4 ý a, b, c, d xếp dọc • Thang lũy tiến 10% - 25% - 50% - 100%</p>
+                  </div>
+                  <span className="text-xs bg-gray-100 text-gray-700 px-2.5 py-1 rounded-full font-bold">
+                    {p2Count} câu
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {Array.from({ length: p2Count }, (_, i) => i + 1).map((qIdx) => (
+                    <div key={qIdx} className="bg-[#FAFAFA] p-3.5 md:p-4 rounded-2xl border border-gray-200/80 shadow-xs flex flex-col justify-between">
+                      <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-200/60">
+                        <span className="font-extrabold text-xs md:text-sm text-gray-900">Câu {qIdx}</span>
+                        {isSubmitted ? (
+                          <span className="text-xs font-bold text-[#1DB954]">
+                            +{result?.score_details?.part_2?.[qIdx]?.score || 0}đ ({result?.score_details?.part_2?.[qIdx]?.correct_count || 0}/4 ý đúng)
                           </span>
                         ) : (
                           <span className="text-[11px] text-gray-400 font-medium">4 ý a, b, c, d</span>
@@ -735,7 +1034,7 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
                                   <button
                                     disabled={isSubmitted}
                                     onClick={() => updateAnswer('part_2', qIdx, true, sub)}
-                                    className={`min-w-[48px] md:min-w-[50px] h-8 text-xs font-bold rounded-lg transition-all active:scale-95 ${
+                                    className={`min-w-[44px] md:min-w-[50px] h-7 md:h-8 text-xs font-bold rounded-lg transition-all active:scale-95 ${
                                       val === true 
                                         ? (isSubmitted && !isCorrect ? 'bg-rose-500 text-white' : 'bg-[#1DB954] text-white shadow-sm')
                                         : (isSubmitted && correctVal === true ? 'border border-[#1DB954] text-[#1DB954] bg-emerald-50' : 'text-gray-600 hover:text-black hover:bg-white/60')
@@ -746,7 +1045,7 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
                                   <button
                                     disabled={isSubmitted}
                                     onClick={() => updateAnswer('part_2', qIdx, false, sub)}
-                                    className={`min-w-[48px] md:min-w-[50px] h-8 text-xs font-bold rounded-lg transition-all active:scale-95 ${
+                                    className={`min-w-[44px] md:min-w-[50px] h-7 md:h-8 text-xs font-bold rounded-lg transition-all active:scale-95 ${
                                       val === false 
                                         ? (isSubmitted && !isCorrect ? 'bg-rose-500 text-white' : 'bg-[#1DB954] text-white shadow-sm')
                                         : (isSubmitted && correctVal === false ? 'border border-[#1DB954] text-[#1DB954] bg-emerald-50' : 'text-gray-600 hover:text-black hover:bg-white/60')
@@ -824,7 +1123,6 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
 
           </div>
         </div>
-        )}
 
       </div>
     </div>

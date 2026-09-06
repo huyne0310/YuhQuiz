@@ -62,29 +62,29 @@ export const ExamCardSelector: React.FC<ExamCardSelectorProps> = ({
             onClick={() => isOpen && onSelect(ex.id)}
             className={`w-full p-4 rounded-2xl border text-left transition-all relative block ${cardStyle}`}
           >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center space-x-1.5">
-                <span className={`text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border ${badgeColor}`}>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
+                <span className={`text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border whitespace-nowrap flex-shrink-0 ${badgeColor}`}>
                   {ex.subject}
                 </span>
 
-                {/* GHI RÕ THÔNG TIN PUBLIC HOẶC BÀI TẬP LỚP */}
+                {/* GHI RÕ THÔNG TIN PUBLIC HOẶC BÀI TẬP LỚP CHỐNG BỊ BÈ/CHÈN CHỮ */}
                 {ex.is_private ? (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 flex items-center space-x-0.5">
-                    <Lock className="w-2.5 h-2.5 inline mr-0.5" />
-                    <span>Bài tập lớp</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 flex items-center space-x-0.5 whitespace-nowrap flex-shrink-0">
+                    <Lock className="w-2.5 h-2.5 inline mr-0.5 flex-shrink-0" />
+                    <span className="whitespace-nowrap">Bài tập lớp</span>
                   </span>
                 ) : (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-[#15803D] border border-emerald-200 flex items-center space-x-0.5">
-                    <Globe className="w-2.5 h-2.5 inline mr-0.5" />
-                    <span>Công khai</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-[#15803D] border border-emerald-200 flex items-center space-x-0.5 whitespace-nowrap flex-shrink-0">
+                    <Globe className="w-2.5 h-2.5 inline mr-0.5 flex-shrink-0" />
+                    <span className="whitespace-nowrap">Công khai</span>
                   </span>
                 )}
               </div>
 
-              <div className="flex items-center space-x-1 text-xs text-gray-500 font-mono">
-                <Clock className="w-3.5 h-3.5 text-gray-400" />
-                <span>{ex.duration_minutes} phút</span>
+              <div className="flex items-center space-x-1 text-xs text-gray-500 font-mono whitespace-nowrap flex-shrink-0">
+                <Clock className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                <span className="whitespace-nowrap">{ex.duration_minutes} phút</span>
               </div>
             </div>
 

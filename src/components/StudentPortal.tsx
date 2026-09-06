@@ -360,23 +360,23 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
                       >
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-2">
-                              <span className={`text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border ${badgeColor}`}>
+                            <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
+                              <span className={`text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border whitespace-nowrap flex-shrink-0 ${badgeColor}`}>
                                 {ex.subject}
                               </span>
 
-                              {/* GHI RÕ THÔNG TIN LỚP ĐƯỢC GIAO HOẶC CÔNG KHAI (YÊU CẦU ĐỀ BÀI) */}
+                              {/* GHI RÕ THÔNG TIN LỚP ĐƯỢC GIAO HOẶC CÔNG KHAI (CHỐNG CHÈN CHỮ) */}
                               {ex.is_private ? (
-                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 whitespace-nowrap flex-shrink-0">
                                   🔒 Lớp: {ex.assignedClassNames?.join(', ') || 'Riêng theo lớp'}
                                 </span>
                               ) : (
-                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-[#15803D] border border-emerald-200">
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-[#15803D] border border-emerald-200 whitespace-nowrap flex-shrink-0">
                                   🌐 Kỳ thi Công khai
                                 </span>
                               )}
                             </div>
-                            <span className="text-xs font-mono text-gray-500 font-bold">{ex.duration_minutes} phút</span>
+                            <span className="text-xs font-mono text-gray-500 font-bold whitespace-nowrap flex-shrink-0">{ex.duration_minutes} phút</span>
                           </div>
 
                           <h3 className="font-extrabold text-base text-gray-900 leading-snug">

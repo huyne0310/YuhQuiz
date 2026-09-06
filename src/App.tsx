@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  BookOpen, User, ShieldCheck, ArrowRight, Sparkles, GraduationCap, 
+  Menu, BookOpen, User, ShieldCheck, ArrowRight, Sparkles, GraduationCap, 
   LogIn, Users, Plus, LogOut, Award, CheckCircle2, LayoutDashboard, 
   ChevronRight, ArrowUpRight 
 } from 'lucide-react';
@@ -67,7 +67,7 @@ export function App() {
   const [userProfile, setUserProfile] = useState<any>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [showCompleteProfile, setShowCompleteProfile] = useState(false);
-
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   // 1. Tải danh sách đề thi công khai (CHỈ ĐỀ CÔNG KHAI MỚI HIỆN CHO KHÁCH)
   const loadExams = async () => {
     try {
@@ -267,20 +267,24 @@ export function App() {
     <div className="min-h-screen bg-[#FAFAFA] text-[#121212] flex flex-col justify-between font-sans">
       
       {/* NAVBAR */}
-      <nav className="h-20 max-w-7xl mx-auto w-full px-6 md:px-8 flex items-center justify-between">
+      {/* NAVBAR VỚI HAMBURGER MENU DROPDOWN CHUẨN UX/UI MOBILE */}
+      <nav className="h-20 max-w-7xl mx-auto w-full px-4 md:px-8 flex items-center justify-between relative">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-2xl bg-[#1DB954] flex items-center justify-center text-white font-extrabold shadow-sm">
+          <div className="w-10 h-10 rounded-2xl bg-[#1DB954] flex items-center justify-center text-white font-extrabold shadow-sm flex-shrink-0">
             <GraduationCap className="w-6 h-6" />
           </div>
           <div>
-            <span className="font-extrabold text-xl tracking-tight">Yuh<span className="text-[#1DB954]">Quiz</span></span>
-            <span className="text-[10px] block font-semibold text-gray-400 -mt-1 uppercase tracking-wider">Thi thử TNTHPT</span>
+            <span className="font-extrabold text-xl tracking-tight leading-tight block">
+              Yuh<span className="text-[#1DB954]">Quiz</span>
+            </span>
+            <span className="text-[10px] block font-semibold text-gray-400 -mt-1 uppercase tracking-wider">
+              Thi thử TN THPT
+            </span>
           </div>
         </div>
 
-        {/* NÚT PROFILE / GÓC HỌC TẬP TRÊN NAVBAR (TO, RÕ, ĐẸP) */}
-        <div className="flex items-center space-x-3">
-          {/* CỤM ĐIỀU KHIỂN CỠ CHỮ TRANG WEB TRÊN NAVBAR */}
+        {/* 1. THANH ĐIỀU HƯỚNG TRÊN DESKTOP (>= md) */}
+        <div className="hidden md:flex items-center space-x-3">
           <div className="flex items-center space-x-1 bg-gray-100/90 p-1 rounded-xl border border-gray-200 text-xs shadow-2xs" title="Cỡ chữ trang web">
             <button
               type="button"
@@ -304,21 +308,22 @@ export function App() {
               A+
             </button>
           </div>
+
           {currentUser ? (
             <div className="flex items-center space-x-2">
               {userProfile?.role === 'teacher' ? (
                 <button
                   onClick={() => setMode('teacher')}
-                  className="flex items-center space-x-2 bg-[#1DB954] hover:bg-[#169C46] text-white px-5 py-2.5 rounded-full font-extrabold text-xs shadow-md shadow-emerald-500/25 transition-all active:scale-95"
+                  className="flex items-center space-x-2 bg-[#1DB954] hover:bg-[#169C46] text-white px-5 py-2.5 rounded-full font-extrabold text-xs shadow-md shadow-emerald-500/25 transition-all active:scale-95 whitespace-nowrap"
                 >
                   <ShieldCheck className="w-4 h-4" />
-                  <span>TRUNG TÂM QUẢN TRỊ</span>
+                  <span>TRUNG TÂM QUẢN TRỊ GV</span>
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               ) : (
                 <button
                   onClick={() => setMode('student_portal')}
-                  className="flex items-center space-x-2 bg-[#1DB954] hover:bg-[#169C46] text-white px-5 py-2.5 rounded-full font-extrabold text-xs shadow-md shadow-emerald-500/25 transition-all active:scale-95"
+                  className="flex items-center space-x-2 bg-[#1DB954] hover:bg-[#169C46] text-white px-5 py-2.5 rounded-full font-extrabold text-xs shadow-md shadow-emerald-500/25 transition-all active:scale-95 whitespace-nowrap"
                 >
                   <GraduationCap className="w-4 h-4" />
                   <span>GÓC HỌC TẬP CỦA BẠN</span>
@@ -337,26 +342,161 @@ export function App() {
           ) : (
             <button
               onClick={() => setIsAuthModalOpen(true)}
-              className="flex items-center space-x-2 text-xs font-bold text-gray-700 hover:text-black bg-white border border-gray-200 hover:border-gray-300 px-5 py-2.5 rounded-full transition-all shadow-sm active:scale-95"
+              className="flex items-center space-x-2 text-xs font-bold text-gray-700 hover:text-black bg-white border border-gray-200 hover:border-gray-300 px-5 py-2.5 rounded-full transition-all shadow-sm active:scale-95 whitespace-nowrap"
             >
               <LogIn className="w-4 h-4 text-[#1DB954]" />
               <span>Đăng nhập / Đăng ký</span>
             </button>
           )}
         </div>
-      </nav>
 
-      {/* HERO & VÀO PHÒNG THI */}
-      <main className="max-w-4xl mx-auto px-6 py-8 flex flex-col items-center text-center w-full">
-        <div className="inline-flex items-center space-x-2 bg-emerald-50 text-[#15803D] border border-emerald-200 px-4 py-1.5 rounded-full text-xs font-bold mb-5">
-          <Sparkles className="w-3.5 h-3.5 text-[#1DB954]" />
-          <span>Chào mừng đến với YuhQuiz - Nền tảng khảo thí trực tuyến dành cho học sinh THPT</span>
+        {/* 2. NÚT HAMBURGER MENU TRÊN MOBILE (< md) */}
+        <div className="md:hidden flex items-center space-x-2">
+          <button
+            type="button"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="w-10 h-10 rounded-2xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-800 transition-all shadow-xs"
+            title="Menu ứng dụng"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
         </div>
 
-        <h1 className="text-3xl md:text-5xl font-extrabold text-gray-950 tracking-tight max-w-2xl leading-tight">
+        {/* 3. MENU THẢ XUỐNG TRÊN MOBILE (DROPDOWN DRAWER) */}
+        {isMobileMenuOpen && (
+          <div className="md:hidden absolute top-20 left-4 right-4 bg-white/98 backdrop-blur-md border border-gray-200 rounded-3xl shadow-2xl p-4 z-50 animate-in fade-in space-y-3">
+            {currentUser ? (
+              <div className="space-y-3">
+                <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-2xl border border-gray-200">
+                  <div className="w-10 h-10 rounded-xl bg-[#1DB954] text-white font-extrabold text-base flex items-center justify-center shadow-xs">
+                    {userProfile?.full_name?.charAt(0).toUpperCase() || 'U'}
+                  </div>
+                  <div className="overflow-hidden">
+                    <span className="font-extrabold text-sm text-gray-900 truncate block">
+                      {userProfile?.full_name || currentUser.email}
+                    </span>
+                    <span className="text-[10px] font-bold text-[#15803D] bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      {userProfile?.role === 'teacher' ? '👨‍🏫 Giáo viên' : '🎓 Học sinh'}
+                    </span>
+                  </div>
+                </div>
+
+                {userProfile?.role === 'teacher' ? (
+                  <button
+                    onClick={() => {
+                      setMode('teacher');
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="w-full py-3 px-4 rounded-xl bg-[#1DB954] text-white font-extrabold text-xs flex items-center justify-between shadow-sm"
+                  >
+                    <span className="flex items-center space-x-2">
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>TRUNG TÂM QUẢN TRỊ GV</span>
+                    </span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setMode('student_portal');
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="w-full py-3 px-4 rounded-xl bg-[#1DB954] text-white font-extrabold text-xs flex items-center justify-between shadow-sm"
+                  >
+                    <span className="flex items-center space-x-2">
+                      <GraduationCap className="w-4 h-4" />
+                      <span>GÓC HỌC TẬP CỦA BẠN</span>
+                    </span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                )}
+
+                <div className="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl border border-gray-200 text-xs">
+                  <span className="text-gray-600 font-bold">Cỡ chữ trang:</span>
+                  <div className="flex items-center space-x-1.5">
+                    <button
+                      onClick={() => handleFontZoom(-5)}
+                      disabled={fontZoom <= 85}
+                      className="w-7 h-7 rounded-lg bg-white border border-gray-200 font-bold"
+                    >
+                      A-
+                    </button>
+                    <span className="font-mono text-xs font-bold px-1.5">{fontZoom}%</span>
+                    <button
+                      onClick={() => handleFontZoom(5)}
+                      disabled={fontZoom >= 120}
+                      className="w-7 h-7 rounded-lg bg-white border border-gray-200 font-bold"
+                    >
+                      A+
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    handleLogout();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full py-2.5 text-center text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-xl border border-rose-200 transition-all flex items-center justify-center space-x-1.5"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Đăng xuất tài khoản</span>
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                <button
+                  onClick={() => {
+                    setIsAuthModalOpen(true);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full py-3 px-4 rounded-xl bg-[#1DB954] text-white font-extrabold text-xs flex items-center justify-center space-x-2 shadow-sm"
+                >
+                  <LogIn className="w-4 h-4" />
+                  <span>Đăng nhập / Đăng ký</span>
+                </button>
+
+                <div className="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl border border-gray-200 text-xs">
+                  <span className="text-gray-600 font-bold">Cỡ chữ trang:</span>
+                  <div className="flex items-center space-x-1.5">
+                    <button
+                      onClick={() => handleFontZoom(-5)}
+                      disabled={fontZoom <= 85}
+                      className="w-7 h-7 rounded-lg bg-white border border-gray-200 font-bold"
+                    >
+                      A-
+                    </button>
+                    <span className="font-mono text-xs font-bold px-1.5">{fontZoom}%</span>
+                    <button
+                      onClick={() => handleFontZoom(5)}
+                      disabled={fontZoom >= 120}
+                      className="w-7 h-7 rounded-lg bg-white border border-gray-200 font-bold"
+                    >
+                      A+
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </nav>
+
+      {/* HERO & VÀO PHÒNG THI (CẬP NHẬT CHUẨN XÁC 100% THEO ẢNH YÊU CẦU CỦA BẠN) */}
+      <main className="max-w-4xl mx-auto px-4 md:px-6 py-6 md:py-10 flex flex-col items-center text-center w-full">
+        {/* HUY HIỆU CHÀO MỪNG CHUẨN */}
+        <div className="inline-flex items-center space-x-2 bg-emerald-50 text-[#15803D] border border-emerald-200 px-4 py-1.5 rounded-full text-xs font-bold mb-4 md:mb-6 shadow-2xs">
+          <Sparkles className="w-3.5 h-3.5 text-[#1DB954]" />
+          <span>Chào mừng đến với YuhQuiz – Nền tảng khảo thí trực tuyến dành cho học sinh THPT</span>
+        </div>
+
+        {/* TIÊU ĐỀ CHÍNH CHUẨN */}
+        <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold text-gray-950 tracking-tight max-w-3xl leading-tight">
           Nền tảng khảo thí trực tuyến nhanh gọn và tiện ích dành cho học sinh THPT
         </h1>
-        <p className="text-[14px] text-gray-500 mt-2.5 max-w-xl">
+        
+        {/* MÔ TẢ PHỤ CHUẨN */}
+        <p className="text-xs sm:text-sm md:text-base text-gray-500 mt-3 max-w-2xl leading-relaxed">
           Cung cấp giải pháp tổ chức thi và thi thử toàn diện, đáp ứng linh hoạt nhu cầu đánh giá năng lực.
         </p>
 
@@ -398,7 +538,7 @@ export function App() {
               </div>
               <div>
                 <span className="text-[10px] font-extrabold text-[#15803D] uppercase tracking-wider block">
-                  Không Gian khảo thí & quản lý lớp
+                  Không Gian Giảng Dạy
                 </span>
                 <h3 className="font-extrabold text-base text-gray-900 leading-tight">
                   Kính chào, {userProfile?.full_name || 'Thầy/Cô'}!
@@ -421,7 +561,7 @@ export function App() {
 
         {!currentUser && (
           <div className="w-full max-w-xl mt-8 bg-white border border-gray-200 rounded-3xl p-4 shadow-xs flex items-center justify-between text-left">
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2 sm:space-x-3 flex-shrink-0">
               <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-[#1DB954] flex items-center justify-center flex-shrink-0">
                 <Sparkles className="w-5 h-5" />
               </div>
