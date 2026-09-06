@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Clock, AlertTriangle, Send, CheckCircle2, XCircle, 
   GripVertical, Award, User, RefreshCw, ArrowLeft, 
-  FileText, CheckSquare, ChevronUp, ChevronDown, Layers, Maximize2 
+  FileText, CheckSquare, ChevronUp, ChevronDown 
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useExamTimer } from '../hooks/useExamTimer';
@@ -27,7 +27,7 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
   const [splitRatio, setSplitRatio] = useState<number>(55);
   const [isDragging, setIsDragging] = useState<boolean>(false);
 
-  // 2. Quản lý xem trên Mobile (Chế độ Bottom Sheet trượt trong cùng 1 tab để không bị tính gian lận)
+  // 2. Quản lý xem trên Mobile (Bottom Sheet trượt trong cùng 1 tab để không bị phạt gian lận)
   const [isMobileSheetOpen, setIsMobileSheetOpen] = useState<boolean>(false);
   const [useGoogleViewer, setUseGoogleViewer] = useState<boolean>(true);
 
@@ -88,7 +88,7 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
       if (data) {
         setExam(data);
         if (data.end_at && new Date() > new Date(data.end_at)) {
-          alert('Kỳ thi này đã kết thúc thời gian làm bài!');
+          alert('Kỳ thi này đã kết thúc thời hạn nộp bài!');
         }
       }
 
@@ -102,7 +102,7 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
       if (subData) {
         if (subData.status === 'submitted') {
           setIsSubmitted(true);
-          setIsMobileSheetOpen(true); // Khi đã nộp thì mở phiếu xem điểm
+          setIsMobileSheetOpen(true);
           setResult({
             score: subData.score,
             score_details: subData.score_details,
@@ -128,7 +128,8 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
     }
   }, [isSubmitted]);
 
-  const duration = exam?.duration_minutes || 93;
+  // SỬA LỖI 93 PHÚT: Lấy chính xác thời gian thi do giáo viên thiết lập (Ví dụ: 50 phút Lý, 50 phút Anh, 90 phút Toán)
+  const duration = exam?.duration_minutes || 0;
   const timeLeft = useExamTimer(duration, `${examId}_${sessionToken}`, handleTimeOut, isSubmitted);
 
   // Kéo thả thanh chia Desktop
@@ -224,6 +225,16 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Màn hình chờ tải đề thi & thời gian chính xác
+  if (!exam) {
+    return (
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#FAFAFA] space-y-3 font-sans">
+        <RefreshCw className="w-8 h-8 animate-spin text-[#1DB954]" />
+        <p className="text-sm font-semibold text-gray-600">Đang chuẩn bị đề thi và thời gian làm bài...</p>
+      </div>
+    );
+  }
+
   const p1Count = exam?.config?.sections?.find(s => s.id === 'part_1')?.question_count ?? 0;
   const p2Count = exam?.config?.sections?.find(s => s.id === 'part_2')?.question_count ?? 0;
   const p3Count = exam?.config?.sections?.find(s => s.id === 'part_3')?.question_count ?? 0;
@@ -239,11 +250,9 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
     return count;
   };
 
-  // Nguồn nhúng PDF chống mở tab mới trên điện thoại
   const getPdfEmbedUrl = () => {
     if (!exam?.pdf_url) return '';
     if (useGoogleViewer) {
-      // Dùng Google Docs Embedded Viewer (hiển thị HTML5 Canvas nội tuyến trên cả iOS & Android không cần mở tab mới)
       return `https://docs.google.com/viewer?url=${encodeURIComponent(exam.pdf_url)}&embedded=true`;
     }
     return `${exam.pdf_url}#toolbar=0&navpanes=0`;
@@ -252,7 +261,7 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
   return (
     <div className="flex flex-col h-screen w-screen bg-[#FAFAFA] text-[#121212] font-sans antialiased select-none overflow-hidden">
       
-      {/* 1. TOP HEADER (TỐI ƯU CẢ MOBILE & DESKTOP) */}
+      {/* 1. TOP HEADER */}
       <header className="h-14 md:h-16 bg-white border-b border-[#EAEAEA] px-3 md:px-6 flex items-center justify-between shadow-sm z-30 flex-shrink-0">
         <div className="flex items-center space-x-2.5">
           <button 
@@ -269,7 +278,7 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
             </div>
             <div>
               <h1 className="font-bold text-xs md:text-sm text-gray-900 truncate max-w-[130px] sm:max-w-[200px] md:max-w-xs leading-tight">
-                {exam?.title || 'Đang tải đề thi...'}
+                {exam?.title}
               </h1>
               <div className="flex items-center space-x-1.5 text-[10px] md:text-[11px] text-gray-500">
                 <span className="font-semibold text-gray-800">{studentName}</span>
@@ -287,7 +296,7 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
             </div>
           )}
 
-          {/* Đồng hồ đếm ngược */}
+          {/* Đồng hồ đếm ngược: Hiển thị đúng số phút từ đề thi */}
           {!isSubmitted ? (
             <div className={`flex items-center space-x-1.5 px-2.5 md:px-3 py-1 md:py-1.5 rounded-full font-mono font-bold text-xs md:text-sm tracking-wider ${
               timeLeft < 300 
@@ -299,7 +308,7 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
             </div>
           ) : (
             <div className="flex items-center space-x-1.5 bg-gray-100 text-gray-700 px-2.5 py-1 rounded-full font-bold text-xs">
-              <CheckCircle2 className="w-3.5 h-3.5 text-[#1DB954]" />
+              <CheckCircle2 className="w-4 h-4 text-[#1DB954]" />
               <span>Đã hoàn thành</span>
             </div>
           )}
@@ -326,27 +335,25 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
         </div>
       </header>
 
-      {/* 2. KHU VỰC TRUNG TÂM (DESKTOP: SPLIT-VIEW • MOBILE: FULL PDF + BOTTOM DRAWER TRONG CÙNG 1 TAB) */}
+      {/* 2. KHU VỰC TRUNG TÂM */}
       <div className="flex flex-1 overflow-hidden relative">
         
-        {/* ======================= KHUNG ĐỀ THI PDF ======================= */}
+        {/* KHUNG ĐỀ THI PDF */}
         <div 
           style={{ width: window.innerWidth >= 768 ? `${splitRatio}%` : '100%' }} 
           className="h-full bg-[#E5E5E5] relative overflow-hidden flex flex-col flex-1"
         >
-          {/* Thanh công cụ nhỏ hỗ trợ học sinh đổi chế độ render PDF trên di động */}
           <div className="h-8 bg-gray-100 border-b border-gray-200 px-3 flex items-center justify-between text-[11px] text-gray-500 z-10 flex-shrink-0">
             <span className="flex items-center space-x-1">
               <FileText className="w-3.5 h-3.5 text-gray-400" />
-              <span>Đang đọc đề trực tiếp trong tab</span>
+              <span>Đọc đề trực tiếp không cần rời tab</span>
             </span>
             <button
               onClick={() => setUseGoogleViewer(!useGoogleViewer)}
               className="text-[#1DB954] hover:underline font-semibold flex items-center space-x-1"
-              title="Chuyển chế độ đọc nếu PDF không hiện rõ"
             >
               <RefreshCw className="w-3 h-3" />
-              <span>{useGoogleViewer ? 'Đổi sang Trình đọc gốc' : 'Đổi sang Google Viewer'}</span>
+              <span>{useGoogleViewer ? 'Dùng Trình đọc gốc' : 'Dùng Google Viewer'}</span>
             </button>
           </div>
 
@@ -362,7 +369,7 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-gray-400 space-y-2">
               <RefreshCw className="w-6 h-6 animate-spin text-[#1DB954]" />
-              <p className="text-sm">Đang tải tài liệu đề thi...</p>
+              <p className="text-sm">Đang tải đề thi...</p>
             </div>
           )}
         </div>
@@ -389,11 +396,7 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
           />
         )}
 
-        {/* ========================================================================= */}
-        {/* KHUNG ANSWER SHEET: DESKTOP CỘT PHẢI • MOBILE BOTTOM SHEET TRƯỢT */}
-        {/* ========================================================================= */}
-        
-        {/* 2.1. Nút nổi trên Mobile để mở Answer Sheet (Luôn nằm cố định ở đáy màn hình di động) */}
+        {/* NÚT NỔI DƯỚI ĐÁY MÀN HÌNH DI ĐỘNG */}
         <div className="md:hidden fixed bottom-4 left-4 right-4 z-40">
           <button
             onClick={() => setIsMobileSheetOpen(true)}
@@ -410,7 +413,7 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
           </button>
         </div>
 
-        {/* 2.2. Khung Answer Sheet Container (Co giãn mượt mà giữa Desktop & Mobile Drawer) */}
+        {/* KHUNG PHIẾU LÀM BÀI */}
         <div 
           style={{ width: window.innerWidth >= 768 ? `${100 - splitRatio}%` : '100%' }} 
           className={`
@@ -419,7 +422,6 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
             md:block p-4 md:p-6
           `}
         >
-          {/* Thanh cầm kéo đóng Bottom Sheet trên Mobile */}
           <div className="md:hidden flex items-center justify-between pb-3 border-b border-gray-200 mb-4 sticky top-0 bg-[#FAFAFA] z-20 pt-1">
             <div className="flex items-center space-x-2">
               <span className="font-extrabold text-sm text-gray-900">Phiếu làm bài</span>
@@ -429,14 +431,14 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
               onClick={() => setIsMobileSheetOpen(false)}
               className="flex items-center space-x-1 bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1 rounded-full text-xs font-bold"
             >
-              <span>Thu gọn đề</span>
+              <span>Thu gọn</span>
               <ChevronDown className="w-3.5 h-3.5" />
             </button>
           </div>
 
           <div className="max-w-2xl mx-auto space-y-6 pb-28">
             
-            {/* THẺ BÁO ĐIỂM KHI NỘP */}
+            {/* THẺ ĐIỂM SAU NỘP */}
             {isSubmitted && (
               <div className="bg-white border border-[#A7E6BE] rounded-3xl p-5 shadow-sm text-center relative overflow-hidden">
                 <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#1DB954]" />
@@ -650,19 +652,19 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
                               isSubmitted 
                                 ? (qDetail?.is_correct ? 'border-[#1DB954] bg-emerald-50 font-bold' : 'border-rose-300 bg-rose-50')
                                 : 'border-gray-200 focus:border-[#1DB954] bg-white'
-                            }`}
-                          />
-                          {isSubmitted && (
-                            <span className="text-xs font-mono font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-lg whitespace-nowrap">
-                              ĐS: {correctKey || '--'}
-                            </span>
-                          )}
-                        </div>
+                          }`}
+                        />
+                        {isSubmitted && (
+                          <span className="text-xs font-mono font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-lg whitespace-nowrap">
+                            ĐS: {correctKey || '--'}
+                          </span>
+                        )}
                       </div>
-                    );
-                  })}
-                </div>
-              </section>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
             )}
 
           </div>

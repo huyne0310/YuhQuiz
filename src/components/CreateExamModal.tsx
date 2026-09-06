@@ -19,7 +19,7 @@ export const CreateExamModal: React.FC<CreateExamModalProps> = ({
 
   const [title, setTitle] = useState('');
   const [teacherName, setTeacherName] = useState(
-    currentUser?.user_metadata?.full_name || 'Thầy Huy'
+    currentUser?.user_metadata?.full_name || 'Thầy Nguyễn Văn A'
   );
   const [duration, setDuration] = useState(defaultPreset.duration);
   const [pdfUrl, setPdfUrl] = useState('');
