@@ -11,6 +11,9 @@ export function useAntiCheat(
   const awayStartTime = useRef<number | null>(null);
   const blurTimer = useRef<NodeJS.Timeout | null>(null);
   const lastWidth = useRef<number>(window.innerWidth);
+  const lastHeight = useRef<number>(window.innerHeight);
+  const isRotating = useRef<boolean>(false);
+  const rotationTimer = useRef<NodeJS.Timeout | null>(null);
 
   const recordViolation = (reason: string, awaySecs: number = 0) => {
     // NẾU TẮT HOẶC ĐÃ NỘP BÀI THÌ TUYỆT ĐỐI KHÔNG GHI NHẬN VI PHẠM
@@ -66,23 +69,64 @@ export function useAntiCheat(
       }
     };
 
-    // 3. TẦNG 1: PHÁT HIỆN MỞ THANH BÊN AI (RESIZE DETECTION)
-    const handleResize = () => {
-      const delta = lastWidth.current - window.innerWidth;
-      if (delta >= 180 && window.innerWidth < 1100) {
-        recordViolation('Phát hiện mở thanh bên AI / chia đôi màn hình', 2);
-      }
-      lastWidth.current = window.innerWidth;
+    // 3. XỬ LÝ XOAY MÀN HÌNH DI ĐỘNG (NGĂN CHẶN BỊ BÁO CHEAT KHI XOAY NGANG / DỌC)
+    const handleOrientationChange = () => {
+      isRotating.current = true;
+      if (rotationTimer.current) clearTimeout(rotationTimer.current);
+      rotationTimer.current = setTimeout(() => {
+        isRotating.current = false;
+        lastWidth.current = window.innerWidth;
+        lastHeight.current = window.innerHeight;
+      }, 1500);
     };
 
-    // 4. TẦNG 2: PHÁT HIỆN THOÁT TOÀN MÀN HÌNH
+    // 4. PHÁT HIỆN MỞ THANH BÊN AI (CHỈ ÁP DỤNG TRÊN MÁY TÍNH DESKTOP)
+    const handleResize = () => {
+      const currentW = window.innerWidth;
+      const currentH = window.innerHeight;
+
+      // Kịch bản A: Thiết bị đang trong quá trình xoay màn hình (Orientation Change) -> Bỏ qua
+      if (isRotating.current) {
+        lastWidth.current = currentW;
+        lastHeight.current = currentH;
+        return;
+      }
+
+      // Kịch bản B: Hoán đổi tỷ lệ Dọc <-> Ngang (Width/Height swap trên điện thoại/máy tính bảng) -> Bỏ qua
+      const isAspectSwap = 
+        Math.abs(currentW - lastHeight.current) <= 80 && 
+        Math.abs(currentH - lastWidth.current) <= 80;
+      if (isAspectSwap) {
+        lastWidth.current = currentW;
+        lastHeight.current = currentH;
+        return;
+      }
+
+      // Kịch bản C: Thiết bị cảm ứng di động (Mobile / Tablet) -> Bỏ qua thay đổi kích thước do bàn phím ảo hoặc xoay
+      const isMobileDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      if (isMobileDevice) {
+        lastWidth.current = currentW;
+        lastHeight.current = currentH;
+        return;
+      }
+
+      // Kịch bản D (Desktop): Phát hiện co rút màn hình đột ngột khi mở thanh bên AI (Edge Copilot / Chrome Side Panel)
+      const delta = lastWidth.current - currentW;
+      if (delta >= 180 && currentW < 1100) {
+        recordViolation('Phát hiện mở thanh bên AI / chia đôi màn hình', 2);
+      }
+      lastWidth.current = currentW;
+      lastHeight.current = currentH;
+    };
+
+    // 5. PHÁT HIỆN THOÁT TOÀN MÀN HÌNH
     const handleFullscreenChange = () => {
       if (!document.fullscreenElement) {
         recordViolation('Thoát chế độ toàn màn hình', 1);
       }
     };
 
-    // 5. TẦNG 3: CHẶN PHÍM TẮT TRA CỨU & COPY/PASTE
+    // 6. CHẶN PHÍM TẮT TRA CỨU & COPY/PASTE TRÊN MÁY TÍNH
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
         e.key === 'F12' ||
@@ -102,6 +146,10 @@ export function useAntiCheat(
     window.addEventListener('blur', handleBlur);
     window.addEventListener('focus', handleFocus);
     window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleOrientationChange);
+    if (window.screen?.orientation) {
+      window.screen.orientation.addEventListener('change', handleOrientationChange);
+    }
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('contextmenu', handleContextMenu);
@@ -111,10 +159,15 @@ export function useAntiCheat(
       window.removeEventListener('blur', handleBlur);
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleOrientationChange);
+      if (window.screen?.orientation) {
+        window.screen.orientation.removeEventListener('change', handleOrientationChange);
+      }
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('contextmenu', handleContextMenu);
       if (blurTimer.current) clearTimeout(blurTimer.current);
+      if (rotationTimer.current) clearTimeout(rotationTimer.current);
     };
   }, [enabled]);
 

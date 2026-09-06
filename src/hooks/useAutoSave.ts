@@ -56,7 +56,7 @@ export function useAutoSave(
       } catch (err) {
         console.warn('Tạm mất kết nối mạng, bài làm vẫn được bảo vệ tại LocalStorage.');
       }
-    }, 5000);
+    }, 30000);
   }, [examId, sessionToken, studentName, className, isSubmitted, studentId]);
 
   useEffect(() => {
