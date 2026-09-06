@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Clock, AlertTriangle, Send, CheckCircle2, XCircle, 
   GripVertical, Award, User, RefreshCw, ArrowLeft, 
-  FileText, CheckSquare 
+  FileText, CheckSquare, ChevronUp, ChevronDown, Layers, Maximize2 
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useExamTimer } from '../hooks/useExamTimer';
@@ -23,10 +23,15 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
   className,
   onExit,
 }) => {
+  // 1. Quản lý chia đôi màn hình Desktop
   const [splitRatio, setSplitRatio] = useState<number>(55);
   const [isDragging, setIsDragging] = useState<boolean>(false);
-  const [mobileTab, setMobileTab] = useState<'pdf' | 'sheet'>('sheet');
 
+  // 2. Quản lý xem trên Mobile (Chế độ Bottom Sheet trượt trong cùng 1 tab để không bị tính gian lận)
+  const [isMobileSheetOpen, setIsMobileSheetOpen] = useState<boolean>(false);
+  const [useGoogleViewer, setUseGoogleViewer] = useState<boolean>(true);
+
+  // 3. Token phiên thi
   const [sessionToken] = useState<string>(() => {
     const key = `session_${examId}_${studentName.trim()}_${className.trim()}`;
     const existing = localStorage.getItem(key);
@@ -80,7 +85,12 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
         .eq('id', examId)
         .single();
 
-      if (data) setExam(data);
+      if (data) {
+        setExam(data);
+        if (data.end_at && new Date() > new Date(data.end_at)) {
+          alert('Kỳ thi này đã kết thúc thời gian làm bài!');
+        }
+      }
 
       const { data: subData } = await supabase
         .from('submissions')
@@ -92,6 +102,7 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
       if (subData) {
         if (subData.status === 'submitted') {
           setIsSubmitted(true);
+          setIsMobileSheetOpen(true); // Khi đã nộp thì mở phiếu xem điểm
           setResult({
             score: subData.score,
             score_details: subData.score_details,
@@ -112,7 +123,7 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
 
   const handleTimeOut = useCallback(() => {
     if (!isSubmitted) {
-      alert('Đã hết thời gian làm bài! Hệ thống đang tự động nộp bài của bạn.');
+      alert('Đã hết thời gian làm bài! Hệ thống tự động nộp bài của bạn.');
       handleFinalSubmit();
     }
   }, [isSubmitted]);
@@ -120,7 +131,7 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
   const duration = exam?.duration_minutes || 93;
   const timeLeft = useExamTimer(duration, `${examId}_${sessionToken}`, handleTimeOut, isSubmitted);
 
-  // Kéo thả thanh chia tỉ lệ chống dính chuột
+  // Kéo thả thanh chia Desktop
   const handlePointerDown = (e: React.PointerEvent) => {
     e.currentTarget.setPointerCapture(e.pointerId);
     setIsDragging(true);
@@ -151,7 +162,6 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
     };
   }, []);
 
-  // Cập nhật câu trả lời (ghi mốc thời gian ngầm cho giáo viên)
   const updateAnswer = (part: string, qIdx: number, val: any, subKey?: string) => {
     if (isSubmitted) return;
     const elapsedSecs = Math.max(1, Math.floor((Date.now() - startTime) / 1000));
@@ -199,6 +209,7 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
       if (error) throw error;
       setResult(data);
       setIsSubmitted(true);
+      setIsMobileSheetOpen(true);
       localStorage.removeItem('active_exam_session');
     } catch (err: any) {
       alert('Có lỗi xảy ra khi nộp bài: ' + err.message);
@@ -213,9 +224,10 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const p1Count = exam?.config?.sections?.find(s => s.id === 'part_1')?.question_count ?? 12;
-  const p2Count = exam?.config?.sections?.find(s => s.id === 'part_2')?.question_count ?? 4;
-  const p3Count = exam?.config?.sections?.find(s => s.id === 'part_3')?.question_count ?? 6;
+  const p1Count = exam?.config?.sections?.find(s => s.id === 'part_1')?.question_count ?? 0;
+  const p2Count = exam?.config?.sections?.find(s => s.id === 'part_2')?.question_count ?? 0;
+  const p3Count = exam?.config?.sections?.find(s => s.id === 'part_3')?.question_count ?? 0;
+  const totalQuestions = p1Count + p2Count + p3Count;
 
   const countAnswered = () => {
     let count = 0;
@@ -227,29 +239,39 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
     return count;
   };
 
+  // Nguồn nhúng PDF chống mở tab mới trên điện thoại
+  const getPdfEmbedUrl = () => {
+    if (!exam?.pdf_url) return '';
+    if (useGoogleViewer) {
+      // Dùng Google Docs Embedded Viewer (hiển thị HTML5 Canvas nội tuyến trên cả iOS & Android không cần mở tab mới)
+      return `https://docs.google.com/viewer?url=${encodeURIComponent(exam.pdf_url)}&embedded=true`;
+    }
+    return `${exam.pdf_url}#toolbar=0&navpanes=0`;
+  };
+
   return (
-    <div className="flex flex-col h-screen w-screen bg-[#FAFAFA] text-[#121212] font-sans antialiased select-none">
+    <div className="flex flex-col h-screen w-screen bg-[#FAFAFA] text-[#121212] font-sans antialiased select-none overflow-hidden">
       
-      {/* 1. TOP HEADER */}
-      <header className="h-16 bg-white border-b border-[#EAEAEA] px-4 md:px-6 flex items-center justify-between shadow-sm z-30 flex-shrink-0">
-        <div className="flex items-center space-x-3">
+      {/* 1. TOP HEADER (TỐI ƯU CẢ MOBILE & DESKTOP) */}
+      <header className="h-14 md:h-16 bg-white border-b border-[#EAEAEA] px-3 md:px-6 flex items-center justify-between shadow-sm z-30 flex-shrink-0">
+        <div className="flex items-center space-x-2.5">
           <button 
             onClick={onExit}
-            className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-all flex-shrink-0"
+            className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-all flex-shrink-0"
             title="Về danh sách"
           >
             <ArrowLeft className="w-4 h-4 text-gray-700" />
           </button>
           
-          <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-full bg-[#1DB954] flex items-center justify-center text-white font-extrabold text-xs shadow-sm flex-shrink-0">
-              {exam?.subject ? exam.subject.slice(0, 2).toUpperCase() : 'TH'}
+          <div className="flex items-center space-x-2">
+            <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-[#1DB954] flex items-center justify-center text-white font-extrabold text-[11px] shadow-sm flex-shrink-0">
+              {exam?.subject ? exam.subject.slice(0, 2).toUpperCase() : 'EX'}
             </div>
             <div>
-              <h1 className="font-bold text-sm md:text-base text-gray-900 truncate max-w-[160px] md:max-w-xs leading-tight">
+              <h1 className="font-bold text-xs md:text-sm text-gray-900 truncate max-w-[130px] sm:max-w-[200px] md:max-w-xs leading-tight">
                 {exam?.title || 'Đang tải đề thi...'}
               </h1>
-              <div className="flex items-center space-x-1.5 text-[11px] text-gray-500">
+              <div className="flex items-center space-x-1.5 text-[10px] md:text-[11px] text-gray-500">
                 <span className="font-semibold text-gray-800">{studentName}</span>
                 <span>({className})</span>
               </div>
@@ -257,7 +279,7 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2 md:space-x-3">
           {cheatCount > 0 && (
             <div className="hidden sm:flex items-center space-x-1 bg-amber-50 text-amber-800 px-2.5 py-1 rounded-full text-xs font-semibold border border-amber-200">
               <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
@@ -265,9 +287,9 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
             </div>
           )}
 
-          {/* Đồng hồ đếm ngược: Tự động dừng khi đã nộp bài */}
+          {/* Đồng hồ đếm ngược */}
           {!isSubmitted ? (
-            <div className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-full font-mono font-bold text-xs md:text-sm tracking-wider ${
+            <div className={`flex items-center space-x-1.5 px-2.5 md:px-3 py-1 md:py-1.5 rounded-full font-mono font-bold text-xs md:text-sm tracking-wider ${
               timeLeft < 300 
                 ? 'bg-rose-50 text-rose-600 border border-rose-200 animate-pulse' 
                 : 'bg-gray-100 text-gray-800'
@@ -276,8 +298,8 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
               <span>{formatTimer(timeLeft)}</span>
             </div>
           ) : (
-            <div className="flex items-center space-x-1.5 bg-gray-100 text-gray-700 px-3 py-1.5 rounded-full font-bold text-xs">
-              <CheckCircle2 className="w-4 h-4 text-[#1DB954]" />
+            <div className="flex items-center space-x-1.5 bg-gray-100 text-gray-700 px-2.5 py-1 rounded-full font-bold text-xs">
+              <CheckCircle2 className="w-3.5 h-3.5 text-[#1DB954]" />
               <span>Đã hoàn thành</span>
             </div>
           )}
@@ -290,70 +312,62 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
                 }
               }}
               disabled={isSubmitting}
-              className="flex items-center space-x-1.5 bg-[#1DB954] hover:bg-[#169C46] active:scale-95 text-white px-4 py-2 rounded-full font-bold text-xs md:text-sm transition-all shadow-sm flex-shrink-0"
+              className="flex items-center space-x-1.5 bg-[#1DB954] hover:bg-[#169C46] active:scale-95 text-white px-3.5 md:px-4 py-1.5 md:py-2 rounded-full font-bold text-xs md:text-sm transition-all shadow-sm flex-shrink-0"
             >
               {isSubmitting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
               <span>Nộp bài</span>
             </button>
           ) : (
-            <div className="flex items-center space-x-1.5 bg-[#E7F7ED] text-[#15803D] border border-[#A7E6BE] px-3.5 py-1.5 rounded-full font-extrabold text-xs md:text-sm flex-shrink-0">
-              <Award className="w-4 h-4 text-[#1DB954]" />
+            <div className="flex items-center space-x-1.5 bg-[#E7F7ED] text-[#15803D] border border-[#A7E6BE] px-3 py-1 rounded-full font-extrabold text-xs md:text-sm flex-shrink-0">
+              <Award className="w-3.5 h-3.5 text-[#1DB954]" />
               <span>{result?.score} / 10đ</span>
             </div>
           )}
         </div>
       </header>
 
-      {/* 2. THANH ĐIỀU HƯỚNG TRÊN MOBILE */}
-      <div className="md:hidden bg-white border-b border-gray-200 px-4 py-2 flex items-center justify-around z-20 flex-shrink-0 shadow-sm">
-        <button
-          onClick={() => setMobileTab('pdf')}
-          className={`flex items-center space-x-1.5 px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
-            mobileTab === 'pdf' ? 'bg-[#1DB954] text-white shadow-sm' : 'text-gray-600 bg-gray-100'
-          }`}
-        >
-          <FileText className="w-3.5 h-3.5" />
-          <span>Xem Đề Thi</span>
-        </button>
-
-        <button
-          onClick={() => setMobileTab('sheet')}
-          className={`flex items-center space-x-1.5 px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
-            mobileTab === 'sheet' ? 'bg-[#1DB954] text-white shadow-sm' : 'text-gray-600 bg-gray-100'
-          }`}
-        >
-          <CheckSquare className="w-3.5 h-3.5" />
-          <span>Phiếu Trả Lời ({countAnswered()}/{p1Count + p2Count + p3Count})</span>
-        </button>
-      </div>
-
-      {/* 3. KHU VỰC CHÍNH */}
+      {/* 2. KHU VỰC TRUNG TÂM (DESKTOP: SPLIT-VIEW • MOBILE: FULL PDF + BOTTOM DRAWER TRONG CÙNG 1 TAB) */}
       <div className="flex flex-1 overflow-hidden relative">
         
-        {/* CỘT TRÁI: ĐỀ THI PDF */}
+        {/* ======================= KHUNG ĐỀ THI PDF ======================= */}
         <div 
           style={{ width: window.innerWidth >= 768 ? `${splitRatio}%` : '100%' }} 
-          className={`h-full bg-[#E5E5E5] relative overflow-hidden flex flex-col ${
-            mobileTab === 'pdf' ? 'flex' : 'hidden md:flex'
-          }`}
+          className="h-full bg-[#E5E5E5] relative overflow-hidden flex flex-col flex-1"
         >
+          {/* Thanh công cụ nhỏ hỗ trợ học sinh đổi chế độ render PDF trên di động */}
+          <div className="h-8 bg-gray-100 border-b border-gray-200 px-3 flex items-center justify-between text-[11px] text-gray-500 z-10 flex-shrink-0">
+            <span className="flex items-center space-x-1">
+              <FileText className="w-3.5 h-3.5 text-gray-400" />
+              <span>Đang đọc đề trực tiếp trong tab</span>
+            </span>
+            <button
+              onClick={() => setUseGoogleViewer(!useGoogleViewer)}
+              className="text-[#1DB954] hover:underline font-semibold flex items-center space-x-1"
+              title="Chuyển chế độ đọc nếu PDF không hiện rõ"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>{useGoogleViewer ? 'Đổi sang Trình đọc gốc' : 'Đổi sang Google Viewer'}</span>
+            </button>
+          </div>
+
           {exam?.pdf_url ? (
-            <div className={`w-full h-full ${isDragging ? 'pointer-events-none select-none' : ''}`}>
+            <div className={`w-full flex-1 relative ${isDragging ? 'pointer-events-none select-none' : ''}`}>
               <iframe
-                src={`${exam.pdf_url}#toolbar=0&navpanes=0`}
+                src={getPdfEmbedUrl()}
                 title="Đề thi PDF"
                 className="w-full h-full border-none"
+                allow="autoplay"
               />
             </div>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-gray-400 space-y-2">
               <RefreshCw className="w-6 h-6 animate-spin text-[#1DB954]" />
-              <p className="text-sm">Đang tải đề thi PDF...</p>
+              <p className="text-sm">Đang tải tài liệu đề thi...</p>
             </div>
           )}
         </div>
 
-        {/* THANH CHIA TỈ LỆ KÉO THẢ */}
+        {/* THANH CHIA TỈ LỆ DESKTOP */}
         <div
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -375,238 +389,281 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
           />
         )}
 
-        {/* CỘT PHẢI: ANSWER SHEET (ĐÃ BỎ DẤU THỜI GIAN TRÊN TRANG HỌC SINH) */}
+        {/* ========================================================================= */}
+        {/* KHUNG ANSWER SHEET: DESKTOP CỘT PHẢI • MOBILE BOTTOM SHEET TRƯỢT */}
+        {/* ========================================================================= */}
+        
+        {/* 2.1. Nút nổi trên Mobile để mở Answer Sheet (Luôn nằm cố định ở đáy màn hình di động) */}
+        <div className="md:hidden fixed bottom-4 left-4 right-4 z-40">
+          <button
+            onClick={() => setIsMobileSheetOpen(true)}
+            className="w-full bg-[#121212] hover:bg-black text-white px-5 py-3.5 rounded-2xl font-bold text-xs shadow-2xl flex items-center justify-between border border-white/20 active:scale-95 transition-all"
+          >
+            <div className="flex items-center space-x-2">
+              <span className="w-2 h-2 rounded-full bg-[#1DB954] animate-ping" />
+              <span>Phiếu làm bài (Đã làm: {countAnswered()}/{totalQuestions})</span>
+            </div>
+            <div className="flex items-center space-x-1 text-[#1DB954]">
+              <span>Mở phiếu</span>
+              <ChevronUp className="w-4 h-4" />
+            </div>
+          </button>
+        </div>
+
+        {/* 2.2. Khung Answer Sheet Container (Co giãn mượt mà giữa Desktop & Mobile Drawer) */}
         <div 
           style={{ width: window.innerWidth >= 768 ? `${100 - splitRatio}%` : '100%' }} 
-          className={`h-full bg-[#FAFAFA] overflow-y-auto p-4 md:p-6 ${
-            mobileTab === 'sheet' ? 'block' : 'hidden md:block'
-          }`}
+          className={`
+            fixed md:relative bottom-0 left-0 right-0 z-50 md:z-20 bg-[#FAFAFA] overflow-y-auto transition-transform duration-300 ease-out shadow-2xl md:shadow-none
+            ${isMobileSheetOpen ? 'translate-y-0 h-[82vh] md:h-full border-t-2 md:border-t-0 border-[#1DB954] rounded-t-3xl md:rounded-none' : 'translate-y-full md:translate-y-0 h-0 md:h-full'}
+            md:block p-4 md:p-6
+          `}
         >
+          {/* Thanh cầm kéo đóng Bottom Sheet trên Mobile */}
+          <div className="md:hidden flex items-center justify-between pb-3 border-b border-gray-200 mb-4 sticky top-0 bg-[#FAFAFA] z-20 pt-1">
+            <div className="flex items-center space-x-2">
+              <span className="font-extrabold text-sm text-gray-900">Phiếu làm bài</span>
+              <span className="text-xs font-bold text-gray-500">({countAnswered()}/{totalQuestions} câu)</span>
+            </div>
+            <button
+              onClick={() => setIsMobileSheetOpen(false)}
+              className="flex items-center space-x-1 bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1 rounded-full text-xs font-bold"
+            >
+              <span>Thu gọn đề</span>
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
           <div className="max-w-2xl mx-auto space-y-6 pb-28">
             
-            {/* THẺ BÁO ĐIỂM SAU KHI NỘP */}
+            {/* THẺ BÁO ĐIỂM KHI NỘP */}
             {isSubmitted && (
-              <div className="bg-white border border-[#A7E6BE] rounded-3xl p-6 shadow-sm text-center relative overflow-hidden">
+              <div className="bg-white border border-[#A7E6BE] rounded-3xl p-5 shadow-sm text-center relative overflow-hidden">
                 <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#1DB954]" />
-                <h3 className="text-lg font-bold text-[#15803D]">Bạn đã nộp bài thành công!</h3>
-                <div className="mt-3 flex items-baseline justify-center space-x-1">
-                  <span className="text-4xl font-extrabold text-[#1DB954]">{result?.score}</span>
-                  <span className="text-sm font-semibold text-gray-500">/ 10.0 điểm</span>
+                <h3 className="text-base font-bold text-[#15803D]">Bạn đã nộp bài thành công!</h3>
+                <div className="mt-2 flex items-baseline justify-center space-x-1">
+                  <span className="text-3xl md:text-4xl font-extrabold text-[#1DB954]">{result?.score}</span>
+                  <span className="text-xs md:text-sm font-semibold text-gray-500">/ 10.0 điểm</span>
                 </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  Dưới đây là chi tiết đáp án đúng/sai từng câu để bạn đối chiếu ôn tập.
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Xem chi tiết đáp án đúng/sai từng câu để đối chiếu ôn tập.
                 </p>
               </div>
             )}
 
             {/* ======================= PHẦN I ======================= */}
-            <section className="bg-white border border-[#EAEAEA] rounded-3xl p-5 shadow-sm">
-              <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
-                <div>
-                  <h2 className="font-bold text-sm text-gray-900">PHẦN I. Trắc nghiệm 4 lựa chọn</h2>
-                  <p className="text-xs text-gray-400">Chọn 1 phương án đúng (0.25đ / câu)</p>
+            {p1Count > 0 && (
+              <section className="bg-white border border-[#EAEAEA] rounded-3xl p-4 md:p-5 shadow-sm">
+                <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
+                  <div>
+                    <h2 className="font-bold text-sm text-gray-900">PHẦN I. Trắc nghiệm 4 lựa chọn</h2>
+                    <p className="text-[11px] text-gray-400">Chọn 1 phương án đúng</p>
+                  </div>
+                  <span className="text-xs bg-gray-100 text-gray-700 px-2.5 py-1 rounded-full font-bold">
+                    {p1Count} câu
+                  </span>
                 </div>
-                <span className="text-xs bg-gray-100 text-gray-700 px-2.5 py-1 rounded-full font-bold">
-                  {p1Count} câu
-                </span>
-              </div>
 
-              <div className="space-y-3">
-                {Array.from({ length: p1Count }, (_, i) => i + 1).map((qIdx) => {
-                  const currentChoice = answers.part_1?.[qIdx];
-                  const qDetail = result?.score_details?.part_1?.[qIdx];
-                  const correctKey = result?.answer_keys?.part_1?.[qIdx];
+                <div className="space-y-3">
+                  {Array.from({ length: p1Count }, (_, i) => i + 1).map((qIdx) => {
+                    const currentChoice = answers.part_1?.[qIdx];
+                    const qDetail = result?.score_details?.part_1?.[qIdx];
+                    const correctKey = result?.answer_keys?.part_1?.[qIdx];
 
-                  return (
-                    <div key={qIdx} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-none">
-                      <div className="flex items-center space-x-2">
-                        <span className="font-bold text-xs md:text-sm text-gray-800 w-16">Câu {qIdx}:</span>
-                        {isSubmitted && (
-                          qDetail?.is_correct 
-                            ? <span className="inline-flex items-center text-[#1DB954] text-xs font-bold"><CheckCircle2 className="w-4 h-4 mr-1" /> Đúng</span>
-                            : <span className="inline-flex items-center text-rose-500 text-xs font-bold"><XCircle className="w-4 h-4 mr-1" /> Sai (ĐS: {correctKey || '--'})</span>
+                    return (
+                      <div key={qIdx} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-none">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-bold text-xs md:text-sm text-gray-800 w-16">Câu {qIdx}:</span>
+                          {isSubmitted && (
+                            qDetail?.is_correct 
+                              ? <span className="inline-flex items-center text-[#1DB954] text-xs font-bold"><CheckCircle2 className="w-4 h-4 mr-1" /> Đúng</span>
+                              : <span className="inline-flex items-center text-rose-500 text-xs font-bold"><XCircle className="w-4 h-4 mr-1" /> Sai (ĐS: {correctKey || '--'})</span>
+                          )}
+                        </div>
+
+                        <div className="flex space-x-2 md:space-x-3">
+                          {['A', 'B', 'C', 'D'].map((opt) => {
+                            const isSelected = currentChoice === opt;
+                            const isKey = isSubmitted && correctKey === opt;
+                            const isWrong = isSubmitted && isSelected && !qDetail?.is_correct;
+
+                            let style = "border-gray-200 text-gray-700 hover:border-gray-400 bg-white active:scale-95";
+                            if (isSelected) style = "bg-[#1DB954] border-[#1DB954] text-white font-bold shadow-sm";
+                            if (isSubmitted) {
+                              if (isKey) style = "bg-[#1DB954] border-[#1DB954] text-white font-bold ring-2 ring-emerald-300";
+                              else if (isWrong) style = "bg-rose-500 border-rose-500 text-white font-bold";
+                              else style = "border-gray-100 text-gray-300 opacity-40 bg-white";
+                            }
+
+                            return (
+                              <button
+                                key={opt}
+                                disabled={isSubmitted}
+                                onClick={() => updateAnswer('part_1', qIdx, opt)}
+                                className={`w-9 h-9 md:w-10 md:h-10 rounded-full border text-xs md:text-sm font-bold flex items-center justify-center transition-all ${style}`}
+                              >
+                                {opt}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {/* ======================= PHẦN II ======================= */}
+            {p2Count > 0 && (
+              <section className="bg-white border border-[#EAEAEA] rounded-3xl p-4 md:p-5 shadow-sm">
+                <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
+                  <div>
+                    <h2 className="font-bold text-sm text-gray-900">PHẦN II. Trắc nghiệm Đúng / Sai</h2>
+                    <p className="text-[11px] text-gray-400">4 ý a, b, c, d xếp dọc • Thang lũy tiến 10% - 25% - 50% - 100%</p>
+                  </div>
+                  <span className="text-xs bg-gray-100 text-gray-700 px-2.5 py-1 rounded-full font-bold">
+                    {p2Count} câu
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {Array.from({ length: p2Count }, (_, i) => i + 1).map((qIdx) => (
+                    <div key={qIdx} className="bg-[#FAFAFA] p-3.5 md:p-4 rounded-2xl border border-gray-200/80 shadow-xs flex flex-col justify-between">
+                      <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-200/60">
+                        <span className="font-extrabold text-xs md:text-sm text-gray-900">Câu {qIdx}</span>
+                        {isSubmitted ? (
+                          <span className="text-xs font-bold text-[#1DB954]">
+                            +{result?.score_details?.part_2?.[qIdx]?.score || 0}đ ({result?.score_details?.part_2?.[qIdx]?.correct_count || 0}/4 ý đúng)
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-gray-400 font-medium">4 ý a, b, c, d</span>
                         )}
                       </div>
 
-                      <div className="flex space-x-2 md:space-x-3">
-                        {['A', 'B', 'C', 'D'].map((opt) => {
-                          const isSelected = currentChoice === opt;
-                          const isKey = isSubmitted && correctKey === opt;
-                          const isWrong = isSubmitted && isSelected && !qDetail?.is_correct;
-
-                          let style = "border-gray-200 text-gray-700 hover:border-gray-400 bg-white active:scale-95";
-                          if (isSelected) style = "bg-[#1DB954] border-[#1DB954] text-white font-bold shadow-sm";
-                          if (isSubmitted) {
-                            if (isKey) style = "bg-[#1DB954] border-[#1DB954] text-white font-bold ring-2 ring-emerald-300";
-                            else if (isWrong) style = "bg-rose-500 border-rose-500 text-white font-bold";
-                            else style = "border-gray-100 text-gray-300 opacity-40 bg-white";
-                          }
+                      <div className="space-y-2.5">
+                        {['a', 'b', 'c', 'd'].map((sub) => {
+                          const val = answers.part_2?.[qIdx]?.[sub];
+                          const isCorrect = result?.score_details?.part_2?.[qIdx]?.details?.[sub];
+                          const correctVal = result?.answer_keys?.part_2?.[qIdx]?.[sub];
 
                           return (
-                            <button
-                              key={opt}
-                              disabled={isSubmitted}
-                              onClick={() => updateAnswer('part_1', qIdx, opt)}
-                              className={`w-9 h-9 md:w-10 md:h-10 rounded-full border text-xs md:text-sm font-bold flex items-center justify-center transition-all ${style}`}
+                            <div 
+                              key={sub} 
+                              className="flex items-center justify-between py-2 px-3 rounded-xl bg-white border border-gray-200/70 hover:border-gray-300 transition-all shadow-xs"
                             >
-                              {opt}
-                            </button>
+                              <div className="flex items-center space-x-2">
+                                <span className="font-bold text-xs text-gray-800">Ý {sub})</span>
+                                {isSubmitted && (
+                                  isCorrect ? (
+                                    <span className="inline-flex items-center text-[#1DB954] text-[11px] font-bold">
+                                      <CheckCircle2 className="w-3.5 h-3.5 mr-0.5" /> Đúng
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center text-rose-500 text-[11px] font-bold">
+                                      <XCircle className="w-3.5 h-3.5 mr-0.5" /> Sai
+                                    </span>
+                                  )
+                                )}
+                              </div>
+
+                              <div className="flex items-center space-x-2">
+                                {isSubmitted && (
+                                  <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-[#15803D] border border-emerald-200">
+                                    ĐS: {correctVal === true ? 'Đúng' : correctVal === false ? 'Sai' : '--'}
+                                  </span>
+                                )}
+
+                                <div className="inline-flex rounded-xl p-0.5 bg-gray-100 border border-gray-200/60 space-x-1">
+                                  <button
+                                    disabled={isSubmitted}
+                                    onClick={() => updateAnswer('part_2', qIdx, true, sub)}
+                                    className={`min-w-[48px] md:min-w-[50px] h-8 text-xs font-bold rounded-lg transition-all active:scale-95 ${
+                                      val === true 
+                                        ? (isSubmitted && !isCorrect ? 'bg-rose-500 text-white' : 'bg-[#1DB954] text-white shadow-sm')
+                                        : (isSubmitted && correctVal === true ? 'border border-[#1DB954] text-[#1DB954] bg-emerald-50' : 'text-gray-600 hover:text-black hover:bg-white/60')
+                                    }`}
+                                  >
+                                    Đúng
+                                  </button>
+                                  <button
+                                    disabled={isSubmitted}
+                                    onClick={() => updateAnswer('part_2', qIdx, false, sub)}
+                                    className={`min-w-[48px] md:min-w-[50px] h-8 text-xs font-bold rounded-lg transition-all active:scale-95 ${
+                                      val === false 
+                                        ? (isSubmitted && !isCorrect ? 'bg-rose-500 text-white' : 'bg-[#1DB954] text-white shadow-sm')
+                                        : (isSubmitted && correctVal === false ? 'border border-[#1DB954] text-[#1DB954] bg-emerald-50' : 'text-gray-600 hover:text-black hover:bg-white/60')
+                                    }`}
+                                  >
+                                    Sai
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
                           );
                         })}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            </section>
-
-            {/* ======================= PHẦN II (HIỂN THỊ RÕ ĐÁP ÁN ĐÚNG SAU KHI NỘP) ======================= */}
-            <section className="bg-white border border-[#EAEAEA] rounded-3xl p-5 shadow-sm">
-              <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
-                <div>
-                  <h2 className="font-bold text-sm text-gray-900">PHẦN II. Trắc nghiệm Đúng / Sai</h2>
-                  <p className="text-xs text-gray-400">4 ý a, b, c, d xếp dọc • Thang lũy tiến 0.1 - 0.25 - 0.5 - 1.0</p>
+                  ))}
                 </div>
-                <span className="text-xs bg-gray-100 text-gray-700 px-2.5 py-1 rounded-full font-bold">
-                  {p2Count} câu
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {Array.from({ length: p2Count }, (_, i) => i + 1).map((qIdx) => (
-                  <div key={qIdx} className="bg-[#FAFAFA] p-4 rounded-2xl border border-gray-200/80 shadow-xs flex flex-col justify-between">
-                    <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-200/60">
-                      <span className="font-extrabold text-xs md:text-sm text-gray-900">Câu {qIdx}</span>
-                      {isSubmitted ? (
-                        <span className="text-xs font-bold text-[#1DB954]">
-                          +{result?.score_details?.part_2?.[qIdx]?.score || 0}đ ({result?.score_details?.part_2?.[qIdx]?.correct_count || 0}/4 ý đúng)
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-gray-400 font-medium">4 ý a, b, c, d</span>
-                      )}
-                    </div>
-
-                    <div className="space-y-2.5">
-                      {['a', 'b', 'c', 'd'].map((sub) => {
-                        const val = answers.part_2?.[qIdx]?.[sub]; // Boolean học sinh chọn
-                        const isCorrect = result?.score_details?.part_2?.[qIdx]?.details?.[sub];
-                        const correctVal = result?.answer_keys?.part_2?.[qIdx]?.[sub]; // Đáp án đúng chuẩn
-
-                        return (
-                          <div 
-                            key={sub} 
-                            className="flex items-center justify-between py-2 px-3 rounded-xl bg-white border border-gray-200/70 hover:border-gray-300 transition-all shadow-xs"
-                          >
-                            <div className="flex items-center space-x-2">
-                              <span className="font-bold text-xs text-gray-800">Ý {sub})</span>
-                              {isSubmitted && (
-                                isCorrect ? (
-                                  <span className="inline-flex items-center text-[#1DB954] text-[11px] font-bold">
-                                    <CheckCircle2 className="w-3.5 h-3.5 mr-0.5" /> Đúng
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center text-rose-500 text-[11px] font-bold">
-                                    <XCircle className="w-3.5 h-3.5 mr-0.5" /> Sai
-                                  </span>
-                                )
-                              )}
-                            </div>
-
-                            {/* Cụm nút Đúng / Sai + Hiện đáp án đúng sau khi nộp */}
-                            <div className="flex items-center space-x-2">
-                              {isSubmitted && (
-                                <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-[#15803D] border border-emerald-200">
-                                  ĐS: {correctVal === true ? 'Đúng' : correctVal === false ? 'Sai' : '--'}
-                                </span>
-                              )}
-
-                              <div className="inline-flex rounded-xl p-0.5 bg-gray-100 border border-gray-200/60 space-x-1">
-                                <button
-                                  disabled={isSubmitted}
-                                  onClick={() => updateAnswer('part_2', qIdx, true, sub)}
-                                  className={`min-w-[50px] h-8 text-xs font-bold rounded-lg transition-all active:scale-95 ${
-                                    val === true 
-                                      ? (isSubmitted && !isCorrect ? 'bg-rose-500 text-white' : 'bg-[#1DB954] text-white shadow-sm')
-                                      : (isSubmitted && correctVal === true ? 'border border-[#1DB954] text-[#1DB954] bg-emerald-50' : 'text-gray-600 hover:text-black hover:bg-white/60')
-                                  }`}
-                                >
-                                  Đúng
-                                </button>
-                                <button
-                                  disabled={isSubmitted}
-                                  onClick={() => updateAnswer('part_2', qIdx, false, sub)}
-                                  className={`min-w-[50px] h-8 text-xs font-bold rounded-lg transition-all active:scale-95 ${
-                                    val === false 
-                                      ? (isSubmitted && !isCorrect ? 'bg-rose-500 text-white' : 'bg-[#1DB954] text-white shadow-sm')
-                                      : (isSubmitted && correctVal === false ? 'border border-[#1DB954] text-[#1DB954] bg-emerald-50' : 'text-gray-600 hover:text-black hover:bg-white/60')
-                                  }`}
-                                >
-                                  Sai
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
+              </section>
+            )}
 
             {/* ======================= PHẦN III ======================= */}
-            <section className="bg-white border border-[#EAEAEA] rounded-3xl p-5 shadow-sm">
-              <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
-                <div>
-                  <h2 className="font-bold text-sm text-gray-900">PHẦN III. Trả lời ngắn</h2>
-                  <p className="text-xs text-gray-400">Điền số hoặc số thập phân (0.5đ / câu)</p>
+            {p3Count > 0 && (
+              <section className="bg-white border border-[#EAEAEA] rounded-3xl p-4 md:p-5 shadow-sm">
+                <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
+                  <div>
+                    <h2 className="font-bold text-sm text-gray-900">PHẦN III. Trả lời ngắn</h2>
+                    <p className="text-[11px] text-gray-400">Điền số hoặc số thập phân</p>
+                  </div>
+                  <span className="text-xs bg-gray-100 text-gray-700 px-2.5 py-1 rounded-full font-bold">
+                    {p3Count} câu
+                  </span>
                 </div>
-                <span className="text-xs bg-gray-100 text-gray-700 px-2.5 py-1 rounded-full font-bold">
-                  {p3Count} câu
-                </span>
-              </div>
 
-              <div className="space-y-3">
-                {Array.from({ length: p3Count }, (_, i) => i + 1).map((qIdx) => {
-                  const val = answers.part_3?.[qIdx] || '';
-                  const qDetail = result?.score_details?.part_3?.[qIdx];
-                  const correctKey = result?.answer_keys?.part_3?.[qIdx];
+                <div className="space-y-3">
+                  {Array.from({ length: p3Count }, (_, i) => i + 1).map((qIdx) => {
+                    const val = answers.part_3?.[qIdx] || '';
+                    const qDetail = result?.score_details?.part_3?.[qIdx];
+                    const correctKey = result?.answer_keys?.part_3?.[qIdx];
 
-                  return (
-                    <div key={qIdx} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-none">
-                      <div className="flex items-center space-x-2">
-                        <span className="font-bold text-xs md:text-sm text-gray-800 w-16">Câu {qIdx}:</span>
-                        {isSubmitted && (
-                          qDetail?.is_correct 
-                            ? <CheckCircle2 className="w-4 h-4 text-[#1DB954]" />
-                            : <XCircle className="w-4 h-4 text-rose-500" />
-                        )}
+                    return (
+                      <div key={qIdx} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-none">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-bold text-xs md:text-sm text-gray-800 w-16">Câu {qIdx}:</span>
+                          {isSubmitted && (
+                            qDetail?.is_correct 
+                              ? <CheckCircle2 className="w-4 h-4 text-[#1DB954]" />
+                              : <XCircle className="w-4 h-4 text-rose-500" />
+                          )}
+                        </div>
+
+                        <div className="flex items-center space-x-2 flex-1 max-w-[220px]">
+                          <input
+                            type="text"
+                            disabled={isSubmitted}
+                            placeholder="Điền đáp số..."
+                            value={val}
+                            onChange={(e) => updateAnswer('part_3', qIdx, e.target.value)}
+                            className={`w-full text-xs md:text-sm px-3 py-2 rounded-xl border font-mono text-center transition-all focus:outline-none ${
+                              isSubmitted 
+                                ? (qDetail?.is_correct ? 'border-[#1DB954] bg-emerald-50 font-bold' : 'border-rose-300 bg-rose-50')
+                                : 'border-gray-200 focus:border-[#1DB954] bg-white'
+                            }`}
+                          />
+                          {isSubmitted && (
+                            <span className="text-xs font-mono font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-lg whitespace-nowrap">
+                              ĐS: {correctKey || '--'}
+                            </span>
+                          )}
+                        </div>
                       </div>
-
-                      <div className="flex items-center space-x-2 flex-1 max-w-[220px]">
-                        <input
-                          type="text"
-                          disabled={isSubmitted}
-                          placeholder="Điền đáp số..."
-                          value={val}
-                          onChange={(e) => updateAnswer('part_3', qIdx, e.target.value)}
-                          className={`w-full text-xs md:text-sm px-3 py-2 rounded-xl border font-mono text-center transition-all focus:outline-none ${
-                            isSubmitted 
-                              ? (qDetail?.is_correct ? 'border-[#1DB954] bg-emerald-50 font-bold' : 'border-rose-300 bg-rose-50')
-                              : 'border-gray-200 focus:border-[#1DB954] bg-white'
-                          }`}
-                        />
-                        {isSubmitted && (
-                          <span className="text-xs font-mono font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-lg whitespace-nowrap">
-                            ĐS: {correctKey || '--'}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
 
           </div>
         </div>

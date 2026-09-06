@@ -13,9 +13,8 @@ export function useAutoSave(
   const latestAnswers = useRef(answers);
   latestAnswers.current = answers;
 
-  // 1. Lưu LocalStorage: Chỉ ghi khi người dùng đã có thao tác hoặc có dữ liệu
+  // 1. Luôn lưu LocalStorage tức thì (0ms) - Chống mất bài kể cả khi F5 ngay lập tức
   useEffect(() => {
-    // Bỏ qua lần render đầu tiên nếu answers đang rỗng để tránh ghi đè dữ liệu đã có trong LocalStorage
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
@@ -26,11 +25,10 @@ export function useAutoSave(
     }
   }, [answers, examId, sessionToken]);
 
-  // 2. Đồng bộ ngầm lên Supabase (Debounce 3s)
+  // 2. Đồng bộ ngầm lên Supabase (Debounce 5s để tối ưu Quota Free Tier)
   const syncToServer = useCallback(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
-    // Không đồng bộ payload rỗng
     const hasData = 
       Object.keys(latestAnswers.current.part_1 || {}).length > 0 ||
       Object.keys(latestAnswers.current.part_2 || {}).length > 0 ||
@@ -49,9 +47,9 @@ export function useAutoSave(
           status: 'in_progress',
         }, { onConflict: 'exam_id,session_token' });
       } catch (err) {
-        console.warn('Đang tạm ngắt kết nối với máy chủ, dữ liệu vẫn an toàn tại LocalStorage.');
+        console.warn('Tạm mất kết nối, bài làm vẫn được bảo vệ tại LocalStorage.');
       }
-    }, 3000);
+    }, 5000);
   }, [examId, sessionToken, studentName, className]);
 
   useEffect(() => {

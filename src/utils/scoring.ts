@@ -1,32 +1,14 @@
 import { ExamConfig, StudentAnswers, ScoreDetails } from '../types/exam';
 
-/**
- * Quy đổi điểm lũy tiến Phần II theo quy chế Bộ Giáo dục & Đào tạo từ năm 2025
- */
-export const TF_PROGRESSIVE_POINTS: Record<number, number> = {
-  0: 0.0,
-  1: 0.1,
-  2: 0.25,
-  3: 0.5,
-  4: 1.0,
-};
-
-/**
- * Chuẩn hóa chuỗi số cho Phần III (Trả lời ngắn)
- * Xử lý: dấu phẩy sang dấu chấm, khoảng trắng thừa, dấu + ở đầu.
- */
 export function normalizeShortAnswer(input: string | undefined | null): string {
   if (!input) return '';
-  return input
+  return String(input)
     .trim()
     .replace(/\s+/g, '')
     .replace(',', '.')
     .replace(/^\+/, '');
 }
 
-/**
- * So khớp đáp án ngắn
- */
 export function matchShortAnswer(
   studentInput: string | undefined | null,
   correctKey: string | undefined | null
@@ -49,12 +31,12 @@ export function matchShortAnswer(
 }
 
 /**
- * Thuật toán chấm điểm hoàn chỉnh theo chuẩn THPTQG 2025
+ * Thuật toán tính điểm đa môn học với thang đo tùy biến
  */
-export function calculateExamScore(
+export function calculateDynamicExamScore(
   answers: StudentAnswers,
   keys: any,
-  config?: ExamConfig
+  config: ExamConfig
 ): {
   totalScore: number;
   maxScore: number;
@@ -68,30 +50,40 @@ export function calculateExamScore(
     part_3: {},
   };
 
-  // Xác định số lượng câu hỏi từ config hoặc mặc định chuẩn Toán 2025
-  const p1Count = config?.sections.find(s => s.id === 'part_1')?.question_count ?? 12;
-  const p2Count = config?.sections.find(s => s.id === 'part_2')?.question_count ?? 4;
-  const p3Count = config?.sections.find(s => s.id === 'part_3')?.question_count ?? 6;
+  const p1Section = config.sections?.find(s => s.id === 'part_1');
+  const p2Section = config.sections?.find(s => s.id === 'part_2');
+  const p3Section = config.sections?.find(s => s.id === 'part_3');
 
-  // 1. Chấm Phần I (Trắc nghiệm 4 lựa chọn - 0.25đ / câu)
+  const p1Count = p1Section?.question_count ?? 12;
+  const p1TotalScore = p1Section?.total_score ?? config.p1_total_score ?? 3.0;
+
+  const p2Count = p2Section?.question_count ?? 4;
+  const p2TotalScore = p2Section?.total_score ?? config.p2_total_score ?? 4.0;
+
+  const p3Count = p3Section?.question_count ?? 6;
+  const p3TotalScore = p3Section?.total_score ?? config.p3_total_score ?? 3.0;
+
+  // 1. Chấm Phần I (Trắc nghiệm đơn - Chia đều điểm)
+  const p1Unit = p1Count > 0 ? p1TotalScore / p1Count : 0;
   for (let i = 1; i <= p1Count; i++) {
-    const studentAns = answers.part_1?.[i]?.trim().toUpperCase() || '';
-    const correctAns = keys.part_1?.[i]?.trim().toUpperCase() || '';
+    const studentAns = (answers.part_1?.[i] || '').trim().toUpperCase();
+    const correctAns = (keys.part_1?.[i] || '').trim().toUpperCase();
     const isCorrect = Boolean(studentAns && studentAns === correctAns);
-    const score = isCorrect ? 0.25 : 0;
+    const score = isCorrect ? p1Unit : 0;
 
     scoreDetails.part_1![i] = {
       is_correct: isCorrect,
-      score,
+      score: Math.round(score * 1000) / 1000,
       student_ans: studentAns,
       key: correctAns,
     };
 
     if (isCorrect) totalScore += score;
-    maxScore += 0.25;
+    maxScore += p1Unit;
   }
 
-  // 2. Chấm Phần II (Trắc nghiệm Đúng / Sai - Lũy tiến 0.1, 0.25, 0.5, 1.0)
+  // 2. Chấm Phần II (Đúng/Sai - Chia đều theo câu và áp dụng tỷ lệ 10% - 25% - 50% - 100%)
+  const p2BasePerQuestion = p2Count > 0 ? p2TotalScore / p2Count : 0;
   for (let i = 1; i <= p2Count; i++) {
     const studentGroup = answers.part_2?.[i] || {};
     const keyGroup = keys.part_2?.[i] || {};
@@ -108,7 +100,14 @@ export function calculateExamScore(
       if (isCorrect) correctCount++;
     }
 
-    const scoreEarned = TF_PROGRESSIVE_POINTS[correctCount] ?? 0;
+    let ratio = 0;
+    if (correctCount === 1) ratio = 0.10;
+    else if (correctCount === 2) ratio = 0.25;
+    else if (correctCount === 3) ratio = 0.50;
+    else if (correctCount === 4) ratio = 1.00;
+
+    const scoreEarned = Math.round(ratio * p2BasePerQuestion * 1000) / 1000;
+
     scoreDetails.part_2![i] = {
       correct_count: correctCount,
       score: scoreEarned,
@@ -116,25 +115,26 @@ export function calculateExamScore(
     };
 
     totalScore += scoreEarned;
-    maxScore += 1.0;
+    maxScore += p2BasePerQuestion;
   }
 
-  // 3. Chấm Phần III (Trả lời ngắn - 0.5đ / câu)
+  // 3. Chấm Phần III (Trả lời ngắn - Chia đều điểm)
+  const p3Unit = p3Count > 0 ? p3TotalScore / p3Count : 0;
   for (let i = 1; i <= p3Count; i++) {
     const studentAns = answers.part_3?.[i] || '';
     const correctAns = keys.part_3?.[i] || '';
     const isCorrect = matchShortAnswer(studentAns, correctAns);
-    const score = isCorrect ? 0.5 : 0;
+    const score = isCorrect ? p3Unit : 0;
 
     scoreDetails.part_3![i] = {
       is_correct: isCorrect,
-      score,
+      score: Math.round(score * 1000) / 1000,
       student_ans: studentAns,
       key: correctAns,
     };
 
     if (isCorrect) totalScore += score;
-    maxScore += 0.5;
+    maxScore += p3Unit;
   }
 
   return {

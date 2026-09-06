@@ -5,13 +5,16 @@ export interface SectionConfig {
   title: string;
   type: QuestionType;
   question_count: number;
-  options?: string[]; // ['A', 'B', 'C', 'D']
-  sub_items?: string[]; // ['a', 'b', 'c', 'd']
-  points_per_question?: number;
+  total_score: number; // Tổng điểm của phần này
+  options?: string[];
+  sub_items?: string[];
 }
 
 export interface ExamConfig {
   sections: SectionConfig[];
+  p1_total_score?: number;
+  p2_total_score?: number;
+  p3_total_score?: number;
 }
 
 export interface Exam {
@@ -22,13 +25,22 @@ export interface Exam {
   config: ExamConfig;
   duration_minutes: number;
   is_active: boolean;
+  teacher_name?: string;
+  created_by?: string;
+  start_at?: string | null; // ISO datetime
+  end_at?: string | null;   // ISO datetime
   created_at: string;
 }
 
 export interface StudentAnswers {
-  part_1?: Record<number, string>; // { 1: "A", 2: "C" }
-  part_2?: Record<number, Record<string, boolean>>; // { 1: { a: true, b: false, c: false, d: true } }
-  part_3?: Record<number, string>; // { 1: "1.5", 2: "1.5" }
+  part_1?: Record<number, string>;
+  part_2?: Record<number, Record<string, boolean>>;
+  part_3?: Record<number, string>;
+  timestamps?: {
+    part_1?: Record<number, number>;
+    part_2?: Record<number, Record<string, number>>;
+    part_3?: Record<number, number>;
+  };
 }
 
 export interface Part1ScoreDetail {
@@ -41,7 +53,7 @@ export interface Part1ScoreDetail {
 export interface Part2ScoreDetail {
   correct_count: number;
   score: number;
-  details: Record<string, boolean>; // a: true, b: false...
+  details: Record<string, boolean>;
 }
 
 export interface Part3ScoreDetail {
