@@ -171,7 +171,7 @@ export function App() {
           </div>
           <div>
             <span className="font-extrabold text-xl tracking-tight">Yuh<span className="text-[#1DB954]">Quiz</span></span>
-            <span className="text-[10px] block font-semibold text-gray-400 -mt-1 uppercase tracking-wider">THPT Quốc Gia 2025</span>
+            <span className="text-[10px] block font-semibold text-gray-400 -mt-1 uppercase tracking-wider">Thi thử tốt nghiệp THPT</span>
           </div>
         </div>
 
@@ -188,14 +188,14 @@ export function App() {
       <main className="max-w-4xl mx-auto px-6 py-10 flex flex-col items-center text-center w-full">
         <div className="inline-flex items-center space-x-2 bg-emerald-50 text-[#15803D] border border-emerald-200 px-4 py-1.5 rounded-full text-xs font-bold mb-6">
           <Sparkles className="w-3.5 h-3.5 text-[#1DB954]" />
-          <span>Hệ thống thi chuẩn Bộ GD&ĐT 2025 • Bảo mật & Chống mất bài</span>
+          <span>Hi</span>
         </div>
 
         <h1 className="text-3xl md:text-5xl font-extrabold text-gray-950 tracking-tight max-w-2xl leading-tight">
           Luyện đề và thi trực tuyến tinh gọn, chuẩn xác.
         </h1>
         <p className="text-xs md:text-sm text-gray-500 mt-3 max-w-xl">
-          Màn hình chia đôi đọc đề PDF và điền phiếu thi phong cách Spotify. Chọn kỳ thi bên dưới để bắt đầu làm bài.
+          Chọn kỳ thi bên dưới để bắt đầu làm bài.
         </p>
 
         {/* FORM THÍ SINH VÀO THI */}
@@ -207,7 +207,7 @@ export function App() {
                 <input
                   type="text"
                   required
-                  placeholder="VD: Nguyễn Văn Huy"
+                  placeholder="VD: Nguyễn Văn A"
                   value={studentName}
                   onChange={(e) => setStudentName(e.target.value)}
                   className="w-full px-3.5 py-2.5 text-xs md:text-sm bg-[#FAFAFA] border border-gray-200 rounded-xl focus:border-[#1DB954] focus:bg-white focus:outline-none transition-all"
@@ -253,7 +253,7 @@ export function App() {
 
       {/* FOOTER */}
       <footer className="h-16 border-t border-gray-100 flex items-center justify-center text-xs text-gray-400">
-        Phát triển theo quy chuẩn đề thi khảo sát và tốt nghiệp THPT năm 2025 - 2026.
+        Phát triển theo quy chuẩn đề thi khảo sát và tốt nghiệp THPT chương trình GDPT 2018.
       </footer>
 
       {/* MODAL ĐĂNG NHẬP GIÁO VIÊN */}
