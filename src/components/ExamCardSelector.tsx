@@ -19,9 +19,9 @@ export const ExamCardSelector: React.FC<ExamCardSelectorProps> = ({
   const formatDateTime = (isoStr?: string | null) => {
     if (!isoStr) return '';
     const d = new Date(isoStr);
-    const time = ;
-    const date = ;
-    return ;
+    const time = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+    const date = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+    return `${time} ${date}`;
   };
 
   if (exams.length === 0) {
@@ -47,16 +47,23 @@ export const ExamCardSelector: React.FC<ExamCardSelectorProps> = ({
         const preset = SUBJECT_PRESETS[ex.subject];
         const badgeColor = preset?.badge || 'bg-gray-100 text-gray-700 border-gray-200';
 
+        let cardStyle = 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-xs cursor-pointer';
+        if (!isOpen) {
+          cardStyle = 'opacity-60 cursor-not-allowed bg-gray-50 border-gray-200';
+        } else if (isSelected) {
+          cardStyle = 'bg-white border-[#1DB954] shadow-md ring-2 ring-[#1DB954]/60';
+        }
+
         return (
           <button
             type="button"
             key={ex.id}
             disabled={!isOpen}
             onClick={() => isOpen && onSelect(ex.id)}
-            className={}
+            className={`w-full p-4 rounded-2xl border text-left transition-all relative block ${cardStyle}`}
           >
             <div className="flex items-center justify-between mb-2">
-              <span className={}>
+              <span className={`text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border ${badgeColor}`}>
                 {ex.subject}
               </span>
               <div className="flex items-center space-x-1 text-xs text-gray-500 font-mono">

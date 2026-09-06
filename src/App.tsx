@@ -253,7 +253,7 @@ export function App() {
 
       {/* FOOTER */}
       <footer className="h-16 border-t border-gray-100 flex items-center justify-center text-xs text-gray-400">
-        Phát triển theo quy chuẩn đề thi khảo sát và tốt nghiệp THPT chương trình GDPT 2018.
+        Phát triển theo quy chuẩn đề thi khảo sát và tốt nghiệp THPT.
       </footer>
 
       {/* MODAL ĐĂNG NHẬP GIÁO VIÊN */}
