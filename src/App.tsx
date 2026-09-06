@@ -171,7 +171,7 @@ export function App() {
           </div>
           <div>
             <span className="font-extrabold text-xl tracking-tight">Yuh<span className="text-[#1DB954]">Quiz</span></span>
-            <span className="text-[10px] block font-semibold text-gray-400 -mt-1 uppercase tracking-wider">Thi thử tốt nghiệp THPT</span>
+            <span className="text-[10px] block font-semibold text-gray-400 -mt-1 uppercase tracking-wider">Thi thử TNTHPT</span>
           </div>
         </div>
 
