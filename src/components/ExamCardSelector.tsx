@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock, User, Calendar, CheckCircle2, Lock, AlertCircle } from 'lucide-react';
+import { Clock, User, Calendar, CheckCircle2, Lock, AlertCircle, Globe } from 'lucide-react';
 import { SUBJECT_PRESETS } from '../constants/subjectPresets';
 import { Exam } from '../types/exam';
 
@@ -27,8 +27,8 @@ export const ExamCardSelector: React.FC<ExamCardSelectorProps> = ({
   if (exams.length === 0) {
     return (
       <div className="bg-gray-50 border border-dashed border-gray-200 rounded-2xl p-8 text-center text-gray-400 text-xs">
-        <p>Hiện chưa có kỳ thi nào được mở trên hệ thống.</p>
-        <p className="text-[11px] mt-1 text-gray-400">Vui lòng chờ giáo viên tạo đề thi.</p>
+        <p>Hiện chưa có kỳ thi nào được mở công khai trên hệ thống.</p>
+        <p className="text-[11px] mt-1 text-gray-400">Học sinh vui lòng đăng nhập để xem bài tập được giao theo lớp.</p>
       </div>
     );
   }
@@ -63,9 +63,25 @@ export const ExamCardSelector: React.FC<ExamCardSelectorProps> = ({
             className={`w-full p-4 rounded-2xl border text-left transition-all relative block ${cardStyle}`}
           >
             <div className="flex items-center justify-between mb-2">
-              <span className={`text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border ${badgeColor}`}>
-                {ex.subject}
-              </span>
+              <div className="flex items-center space-x-1.5">
+                <span className={`text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border ${badgeColor}`}>
+                  {ex.subject}
+                </span>
+
+                {/* GHI RÕ THÔNG TIN PUBLIC HOẶC BÀI TẬP LỚP */}
+                {ex.is_private ? (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 flex items-center space-x-0.5">
+                    <Lock className="w-2.5 h-2.5 inline mr-0.5" />
+                    <span>Bài tập lớp</span>
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-[#15803D] border border-emerald-200 flex items-center space-x-0.5">
+                    <Globe className="w-2.5 h-2.5 inline mr-0.5" />
+                    <span>Công khai</span>
+                  </span>
+                )}
+              </div>
+
               <div className="flex items-center space-x-1 text-xs text-gray-500 font-mono">
                 <Clock className="w-3.5 h-3.5 text-gray-400" />
                 <span>{ex.duration_minutes} phút</span>

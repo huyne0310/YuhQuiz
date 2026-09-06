@@ -1,165 +1,268 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, User, ShieldCheck, ArrowRight, Sparkles, GraduationCap, LogIn } from 'lucide-react';
+import { 
+  BookOpen, User, ShieldCheck, ArrowRight, Sparkles, GraduationCap, 
+  LogIn, Users, Plus, LogOut, Award, CheckCircle2, LayoutDashboard, 
+  ChevronRight, ArrowUpRight 
+} from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { StudentExamRoom } from './components/StudentExamRoom';
 import { TeacherDashboard } from './components/TeacherDashboard';
+import { StudentPortal } from './components/StudentPortal';
 import { ExamCardSelector } from './components/ExamCardSelector';
-import { TeacherAuthModal } from './components/TeacherAuthModal';
+import { AuthModal } from './components/AuthModal';
+import { CompleteProfileModal } from './components/CompleteProfileModal';
 import { Exam } from './types/exam';
 
 export function App() {
-  const [mode, setMode] = useState<'home' | 'student_exam' | 'teacher'>('home');
+  const [mode, setMode] = useState<'home' | 'student_exam' | 'teacher' | 'student_portal'>('home');
   const [exams, setExams] = useState<Exam[]>([]);
   const [selectedExamId, setSelectedExamId] = useState<string>('');
+  
+  // Thông tin thí sinh vào thi (BẮT ĐẦU TRỐNG 100%, HỌC SINH TỰ GÕ TÊN)
   const [studentName, setStudentName] = useState('');
   const [className, setClassName] = useState('');
 
-  // Trạng thái xác thực tài khoản giáo viên
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-
-  // 1. Tải danh sách đề thi & Khôi phục phiên làm bài
-  const loadExams = async () => {
-    const { data } = await supabase
-      .from('public_exams')
-      .select('*')
-      .eq('is_active', true)
-      .order('created_at', { ascending: false });
-
-    if (data && data.length > 0) {
-      setExams(data);
-      if (!selectedExamId) {
-        setSelectedExamId(data[0].id);
+  // Phiên thi đang hoạt động (Đảm bảo không bao giờ bị lệch dữ liệu)
+  const [activeExamSession, setActiveExamSession] = useState<{
+    examId: string;
+    studentName: string;
+    className: string;
+  } | null>(() => {
+    try {
+      const saved = localStorage.getItem('active_exam_session');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.examId && parsed.studentName && parsed.className) {
+          return parsed;
+        }
       }
-    } else {
-      setExams([]);
+    } catch (e) {}
+    return null;
+  });
+
+  // Trạng thái tài khoản người dùng
+  // Thu phóng cỡ chữ toàn trang web (85% - 120%)
+  const [fontZoom, setFontZoom] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('web_font_zoom');
+      if (saved) return parseInt(saved, 10);
+    } catch (e) {}
+    return 100;
+  });
+
+  const handleFontZoom = (delta: number) => {
+    setFontZoom((prev) => {
+      const next = Math.max(85, Math.min(120, prev + delta));
+      localStorage.setItem('web_font_zoom', next.toString());
+      document.documentElement.style.fontSize = `${(next / 100) * 16}px`;
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    document.documentElement.style.fontSize = `${(fontZoom / 100) * 16}px`;
+  }, [fontZoom]);
+
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [showCompleteProfile, setShowCompleteProfile] = useState(false);
+
+  // 1. Tải danh sách đề thi công khai (CHỈ ĐỀ CÔNG KHAI MỚI HIỆN CHO KHÁCH)
+  const loadExams = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('public_exams')
+        .select('*')
+        .eq('is_active', true)
+        .eq('is_private', false)
+        .order('created_at', { ascending: false });
+
+      if (data && data.length > 0) {
+        setExams(data);
+        if (!selectedExamId) {
+          setSelectedExamId(data[0].id);
+        }
+      } else {
+        setExams([]);
+      }
+    } catch (err) {
+      console.warn('Lỗi tải danh sách đề thi:', err);
+    }
+  };
+
+  // Tải profile người dùng từ database
+  const loadProfile = async (user: any) => {
+    if (!user) {
+      setUserProfile(null);
+      return;
+    }
+
+    try {
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (prof && prof.role) {
+        setUserProfile(prof);
+      } else {
+        setShowCompleteProfile(true);
+      }
+    } catch (err) {
+      console.warn('Lỗi tải hồ sơ:', err);
     }
   };
 
   useEffect(() => {
-    // Khôi phục phiên thi học sinh khi F5
-    const savedSession = localStorage.getItem('active_exam_session');
-    if (savedSession) {
-      try {
-        const parsed = JSON.parse(savedSession);
-        if (parsed.examId && parsed.studentName && parsed.className) {
-          setSelectedExamId(parsed.examId);
-          setStudentName(parsed.studentName);
-          setClassName(parsed.className);
-          setMode('student_exam');
-        }
-      } catch (e) {}
+    if (activeExamSession) {
+      setSelectedExamId(activeExamSession.examId);
+      setStudentName(activeExamSession.studentName);
+      setClassName(activeExamSession.className);
+      setMode('student_exam');
     }
 
     loadExams();
 
-    // Lắng nghe phiên đăng nhập Supabase Auth của Giáo viên
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setCurrentUser(session?.user ?? null);
+      const user = session?.user ?? null;
+      setCurrentUser(user);
+      if (user) loadProfile(user);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setCurrentUser(session?.user ?? null);
+      const user = session?.user ?? null;
+      setCurrentUser(user);
+      if (user) loadProfile(user);
+      else {
+        setUserProfile(null);
+      }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const handleStartExam = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!studentName.trim() || !className.trim() || !selectedExamId) {
+  // BẮT ĐẦU THI AN TOÀN TUYỆT ĐỐI (KIỂM SOÁT BÀI THI RIÊNG TƯ THEO LỚP)
+  const handleStartExam = async (
+    e?: React.FormEvent,
+    customExamId?: string,
+    customName?: string,
+    customClass?: string
+  ) => {
+    if (e) e.preventDefault();
+
+    const targetExamId = String(customExamId || selectedExamId || '').trim();
+    const targetName = String(customName || studentName || '').trim();
+    const targetClass = String(customClass || className || '').trim();
+
+    if (!targetName || !targetClass || !targetExamId) {
       alert('Vui lòng nhập đầy đủ Họ tên, Lớp và chọn Đề thi!');
       return;
     }
 
-    // Kiểm tra thời hạn mở/đóng đề thi trước khi cho vào
-    const targetExam = exams.find(ex => ex.id === selectedExamId);
-    if (targetExam) {
-      const now = new Date();
-      if (targetExam.start_at && now < new Date(targetExam.start_at)) {
-        alert('Kỳ thi này chưa đến thời gian mở! Vui lòng quay lại sau.');
-        return;
-      }
-      if (targetExam.end_at && now > new Date(targetExam.end_at)) {
-        alert('Kỳ thi này đã kết thúc thời gian làm bài!');
+    // Kiểm tra tính riêng tư của đề thi
+    const { data: checkExam } = await supabase
+      .from('public_exams')
+      .select('*')
+      .eq('id', targetExamId)
+      .maybeSingle();
+
+    if (checkExam?.is_private) {
+      // 1. Khách vãng lai chưa đăng nhập -> Chặn tuyệt đối
+      if (!currentUser) {
+        alert('Kỳ thi này là bài tập riêng theo lớp! Thí sinh vãng lai không được phép tham gia.\nVui lòng Đăng nhập tài khoản Học sinh thuộc lớp hoặc Giáo viên để làm bài.');
+        setIsAuthModalOpen(true);
         return;
       }
     }
 
-    localStorage.setItem(
-      'active_exam_session',
-      JSON.stringify({
-        examId: selectedExamId,
-        studentName: studentName.trim(),
-        className: className.trim(),
-      })
-    );
+    const sessionData = {
+      examId: targetExamId,
+      studentName: targetName,
+      className: targetClass,
+    };
 
+    localStorage.setItem('active_exam_session', JSON.stringify(sessionData));
+    setActiveExamSession(sessionData);
+    setSelectedExamId(targetExamId);
+    setStudentName(targetName);
+    setClassName(targetClass);
     setMode('student_exam');
   };
 
   const handleExitExam = () => {
-    if (confirm('Bạn có chắc muốn thoát khỏi phòng thi?')) {
-      localStorage.removeItem('active_exam_session');
-      setMode('home');
-      loadExams();
-    }
-  };
+    localStorage.removeItem('active_exam_session');
+    setActiveExamSession(null);
 
-  // Khi bấm nút "Dành cho Giáo viên"
-  const handleTeacherAccess = () => {
     if (currentUser) {
-      setMode('teacher');
+      if (userProfile?.role === 'teacher') {
+        setMode('teacher');
+      } else {
+        setMode('student_portal');
+      }
     } else {
-      setIsAuthModalOpen(true);
+      setMode('home');
     }
+    loadExams();
   };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setCurrentUser(null);
+    setUserProfile(null);
     setMode('home');
-    alert('Đã đăng xuất tài khoản giáo viên.');
+    alert('Đã đăng xuất tài khoản.');
   };
 
-  // 1. Chế độ Phòng thi học sinh
-  if (mode === 'student_exam') {
+  // 1. CHẾ ĐỘ PHÒNG THI HỌC SINH (CORE NGUYÊN BẢN v11)
+  if (mode === 'student_exam' && activeExamSession) {
     return (
       <StudentExamRoom
-        examId={selectedExamId}
-        studentName={studentName}
-        className={className}
+        examId={activeExamSession.examId}
+        studentName={activeExamSession.studentName}
+        className={activeExamSession.className}
+        currentUser={currentUser}
         onExit={handleExitExam}
       />
     );
   }
 
-  // 2. Chế độ Giáo viên quản trị
+  // 2. CHẾ ĐỘ QUẢN TRỊ GIÁO VIÊN
   if (mode === 'teacher') {
     return (
       <TeacherDashboard
-        currentUser={currentUser}
+        currentUser={userProfile || currentUser}
         onLogout={handleLogout}
         onBackToHome={() => setMode('home')}
         onPreviewExam={(examId) => {
-          setSelectedExamId(examId);
-          setStudentName('Học Sinh Thử Nghiệm');
-          setClassName('12 Demo');
-          localStorage.setItem(
-            'active_exam_session',
-            JSON.stringify({
-              examId,
-              studentName: 'Học Sinh Thử Nghiệm',
-              className: '12 Demo',
-            })
+          handleStartExam(
+            undefined, 
+            examId, 
+            userProfile?.full_name ? `GV: ${userProfile.full_name}` : 'Thầy Nguyễn Văn A', 
+            '12 Demo'
           );
-          setMode('student_exam');
         }}
+        onSwitchToStudentView={() => setMode('student_portal')}
       />
     );
   }
 
-  // 3. Trang chủ Lựa chọn (Spotify Light Theme Landing)
+  // 3. CHẾ ĐỘ DASHBOARD HỌC SINH (LỚP HỌC & LỊCH SỬ THI)
+  if (mode === 'student_portal' && currentUser) {
+    return (
+      <StudentPortal
+        currentUser={userProfile || currentUser}
+        onStartExam={(examId, sName, cName) => {
+          handleStartExam(undefined, examId, sName, cName);
+        }}
+        onLogout={handleLogout}
+        onSwitchToTeacher={userProfile?.role === 'teacher' ? () => setMode('teacher') : undefined}
+      />
+    );
+  }
+
+  // 4. TRANG CHỦ LỰA CHỌN (GIAO DIỆN CHUẨN THƯƠNG HIỆU YUHQUIZ VỚI NÚT ACTION RÕ RÀNG THEO CHUẨN UX/UI)
   return (
     <div className="min-h-screen bg-[#FAFAFA] text-[#121212] flex flex-col justify-between font-sans">
       
@@ -175,31 +278,173 @@ export function App() {
           </div>
         </div>
 
-        <button
-          onClick={handleTeacherAccess}
-          className="flex items-center space-x-2 text-xs font-bold text-gray-700 hover:text-black bg-white border border-gray-200 hover:border-gray-300 px-4 py-2 rounded-full transition-all shadow-sm active:scale-95"
-        >
-          <ShieldCheck className="w-4 h-4 text-[#1DB954]" />
-          <span>{currentUser ? `Quản trị (${currentUser.email?.split('@')[0]})` : 'Dành cho Giáo viên'}</span>
-        </button>
+        {/* NÚT PROFILE / GÓC HỌC TẬP TRÊN NAVBAR (TO, RÕ, ĐẸP) */}
+        <div className="flex items-center space-x-3">
+          {/* CỤM ĐIỀU KHIỂN CỠ CHỮ TRANG WEB TRÊN NAVBAR */}
+          <div className="flex items-center space-x-1 bg-gray-100/90 p-1 rounded-xl border border-gray-200 text-xs shadow-2xs" title="Cỡ chữ trang web">
+            <button
+              type="button"
+              onClick={() => handleFontZoom(-5)}
+              disabled={fontZoom <= 85}
+              className="w-6 h-6 rounded-lg hover:bg-white flex items-center justify-center font-bold text-gray-700 disabled:opacity-30 transition-all"
+              title="Giảm cỡ chữ (Tối thiểu 85%)"
+            >
+              A-
+            </button>
+            <span className="font-mono text-[11px] font-bold text-gray-800 min-w-[34px] text-center select-none">
+              {fontZoom}%
+            </span>
+            <button
+              type="button"
+              onClick={() => handleFontZoom(5)}
+              disabled={fontZoom >= 120}
+              className="w-6 h-6 rounded-lg hover:bg-white flex items-center justify-center font-bold text-gray-700 disabled:opacity-30 transition-all"
+              title="Tăng cỡ chữ (Tối đa 120%)"
+            >
+              A+
+            </button>
+          </div>
+          {currentUser ? (
+            <div className="flex items-center space-x-2">
+              {userProfile?.role === 'teacher' ? (
+                <button
+                  onClick={() => setMode('teacher')}
+                  className="flex items-center space-x-2 bg-[#1DB954] hover:bg-[#169C46] text-white px-5 py-2.5 rounded-full font-extrabold text-xs shadow-md shadow-emerald-500/25 transition-all active:scale-95"
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>TRUNG TÂM QUẢN TRỊ</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              ) : (
+                <button
+                  onClick={() => setMode('student_portal')}
+                  className="flex items-center space-x-2 bg-[#1DB954] hover:bg-[#169C46] text-white px-5 py-2.5 rounded-full font-extrabold text-xs shadow-md shadow-emerald-500/25 transition-all active:scale-95"
+                >
+                  <GraduationCap className="w-4 h-4" />
+                  <span>GÓC HỌC TẬP CỦA BẠN</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              )}
+
+              <button
+                onClick={handleLogout}
+                className="p-2.5 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 transition-all"
+                title="Đăng xuất"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setIsAuthModalOpen(true)}
+              className="flex items-center space-x-2 text-xs font-bold text-gray-700 hover:text-black bg-white border border-gray-200 hover:border-gray-300 px-5 py-2.5 rounded-full transition-all shadow-sm active:scale-95"
+            >
+              <LogIn className="w-4 h-4 text-[#1DB954]" />
+              <span>Đăng nhập / Đăng ký</span>
+            </button>
+          )}
+        </div>
       </nav>
 
       {/* HERO & VÀO PHÒNG THI */}
-      <main className="max-w-4xl mx-auto px-6 py-10 flex flex-col items-center text-center w-full">
-        <div className="inline-flex items-center space-x-2 bg-emerald-50 text-[#15803D] border border-emerald-200 px-4 py-1.5 rounded-full text-xs font-bold mb-6">
+      <main className="max-w-4xl mx-auto px-6 py-8 flex flex-col items-center text-center w-full">
+        <div className="inline-flex items-center space-x-2 bg-emerald-50 text-[#15803D] border border-emerald-200 px-4 py-1.5 rounded-full text-xs font-bold mb-5">
           <Sparkles className="w-3.5 h-3.5 text-[#1DB954]" />
-          <span>Hi</span>
+          <span>Chào mừng đến với YuhQuiz - Nền tảng khảo thí trực tuyến dành cho học sinh THPT</span>
         </div>
 
         <h1 className="text-3xl md:text-5xl font-extrabold text-gray-950 tracking-tight max-w-2xl leading-tight">
-          Luyện đề và thi trực tuyến tinh gọn, chuẩn xác.
+          Nền tảng khảo thí trực tuyến nhanh gọn và tiện ích dành cho học sinh THPT
         </h1>
-        <p className="text-xs md:text-sm text-gray-500 mt-3 max-w-xl">
-          Chọn kỳ thi bên dưới để bắt đầu làm bài.
+        <p className="text-[14px] text-gray-500 mt-2.5 max-w-xl">
+          Cung cấp giải pháp tổ chức thi và thi thử toàn diện, đáp ứng linh hoạt nhu cầu đánh giá năng lực.
         </p>
 
-        {/* FORM THÍ SINH VÀO THI */}
-        <div className="w-full max-w-lg bg-white border border-gray-200 rounded-3xl p-6 md:p-8 mt-8 shadow-xl shadow-gray-100/50 text-left">
+        {/* HERO CALL-TO-ACTION CARD LỚN TRỰC QUAN */}
+        {currentUser && userProfile?.role === 'student' && (
+          <div className="w-full max-w-xl mt-8 bg-gradient-to-r from-emerald-50/90 via-green-50/80 to-teal-50/90 border-2 border-[#1DB954] rounded-3xl p-5 shadow-lg shadow-emerald-500/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-left animate-in fade-in duration-300">
+            <div className="flex items-center space-x-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-[#1DB954] text-white flex items-center justify-center shadow-md flex-shrink-0">
+                <GraduationCap className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-[10px] font-extrabold text-[#15803D] uppercase tracking-wider block">
+                  Không Gian Thí Sinh
+                </span>
+                <h3 className="font-extrabold text-base text-gray-900 leading-tight">
+                  Chào mừng, {userProfile?.full_name || 'Học sinh'}!
+                </h3>
+                <p className="text-[11px] text-gray-500 mt-0.5">
+                  Lớp học, bài tập được giao & biểu đồ tiến độ điểm số cá nhân
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setMode('student_portal')}
+              className="w-full sm:w-auto bg-[#1DB954] hover:bg-[#169C46] active:scale-95 text-white px-5 py-3 rounded-2xl font-extrabold text-xs shadow-md shadow-emerald-500/25 flex items-center justify-center space-x-2 transition-all flex-shrink-0"
+            >
+              <span>VÀO GÓC HỌC TẬP</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {currentUser && userProfile?.role === 'teacher' && (
+          <div className="w-full max-w-xl mt-8 bg-gradient-to-r from-emerald-50/90 via-green-50/80 to-teal-50/90 border-2 border-[#1DB954] rounded-3xl p-5 shadow-lg shadow-emerald-500/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-left animate-in fade-in duration-300">
+            <div className="flex items-center space-x-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-[#1DB954] text-white flex items-center justify-center shadow-md flex-shrink-0">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-[10px] font-extrabold text-[#15803D] uppercase tracking-wider block">
+                  Không Gian khảo thí & quản lý lớp
+                </span>
+                <h3 className="font-extrabold text-base text-gray-900 leading-tight">
+                  Kính chào, {userProfile?.full_name || 'Thầy/Cô'}!
+                </h3>
+                <p className="text-[11px] text-gray-500 mt-0.5">
+                  Quản lý lớp, tạo đề thi, chấm lại bài & phân tích phổ điểm
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setMode('teacher')}
+              className="w-full sm:w-auto bg-[#1DB954] hover:bg-[#169C46] active:scale-95 text-white px-5 py-3 rounded-2xl font-extrabold text-xs shadow-md shadow-emerald-500/25 flex items-center justify-center space-x-2 transition-all flex-shrink-0"
+            >
+              <span>VÀO TRUNG TÂM QUẢN TRỊ</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {!currentUser && (
+          <div className="w-full max-w-xl mt-8 bg-white border border-gray-200 rounded-3xl p-4 shadow-xs flex items-center justify-between text-left">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-[#1DB954] flex items-center justify-center flex-shrink-0">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-bold text-xs text-gray-900">
+                  Bạn là Học sinh hoặc Giáo viên?
+                </h4>
+                <p className="text-[11px] text-gray-400">
+                  Đăng nhập để nhận đề theo lớp và lưu bảng điểm lịch sử
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsAuthModalOpen(true)}
+              className="bg-[#1DB954] hover:bg-[#169C46] text-white px-4 py-2 rounded-xl font-bold text-xs shadow-xs transition-all flex-shrink-0 ml-2"
+            >
+              Đăng nhập ngay
+            </button>
+          </div>
+        )}
+
+        {/* FORM THÍ SINH VÀO THI NHANH (CHỈ CHỨA ĐỀ CÔNG KHAI) */}
+        <div className="w-full max-w-lg bg-white border border-gray-200 rounded-3xl p-6 md:p-8 mt-6 shadow-xl shadow-gray-100/50 text-left">
           <form onSubmit={handleStartExam} className="space-y-4 text-xs">
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -210,7 +455,7 @@ export function App() {
                   placeholder="VD: Nguyễn Văn A"
                   value={studentName}
                   onChange={(e) => setStudentName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-xs md:text-sm bg-[#FAFAFA] border border-gray-200 rounded-xl focus:border-[#1DB954] focus:bg-white focus:outline-none transition-all"
+                  className="w-full px-3.5 py-2.5 text-xs md:text-sm bg-[#FAFAFA] border border-gray-200 rounded-xl focus:border-[#1DB954] focus:bg-white focus:outline-none transition-all font-bold"
                 />
               </div>
 
@@ -222,12 +467,12 @@ export function App() {
                   placeholder="VD: 12A1"
                   value={className}
                   onChange={(e) => setClassName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-xs md:text-sm bg-[#FAFAFA] border border-gray-200 rounded-xl focus:border-[#1DB954] focus:bg-white focus:outline-none transition-all"
+                  className="w-full px-3.5 py-2.5 text-xs md:text-sm bg-[#FAFAFA] border border-gray-200 rounded-xl focus:border-[#1DB954] focus:bg-white focus:outline-none transition-all font-bold"
                 />
               </div>
             </div>
 
-            {/* DANH SÁCH THẺ KỲ THI TRỰC QUAN (THAY THẾ DROPDOWN) */}
+            {/* DANH SÁCH THẺ KỲ THI CÔNG KHAI */}
             <div>
               <label className="font-bold text-gray-700 block mb-2">
                 Chọn kỳ thi muốn tham gia *
@@ -256,14 +501,34 @@ export function App() {
         Phát triển theo quy chuẩn đề thi khảo sát và tốt nghiệp THPT.
       </footer>
 
-      {/* MODAL ĐĂNG NHẬP GIÁO VIÊN */}
+      {/* MODAL ĐĂNG NHẬP / ĐĂNG KÝ HỢP NHẤT */}
       {isAuthModalOpen && (
-        <TeacherAuthModal
+        <AuthModal
           onClose={() => setIsAuthModalOpen(false)}
-          onSuccess={(user) => {
-            setCurrentUser(user);
+          onSuccess={(profile) => {
+            setUserProfile(profile);
             setIsAuthModalOpen(false);
-            setMode('teacher');
+            if (profile.role === 'teacher') {
+              setMode('teacher');
+            } else {
+              setMode('student_portal');
+            }
+          }}
+        />
+      )}
+
+      {/* MODAL HOÀN TẤT THÔNG TIN CHO GOOGLE LOGIN */}
+      {showCompleteProfile && currentUser && (
+        <CompleteProfileModal
+          user={currentUser}
+          onSuccess={(profile) => {
+            setUserProfile(profile);
+            setShowCompleteProfile(false);
+            if (profile.role === 'teacher') {
+              setMode('teacher');
+            } else {
+              setMode('student_portal');
+            }
           }}
         />
       )}

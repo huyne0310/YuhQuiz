@@ -1,180 +1,370 @@
-import React, { useState } from 'react';
-import { X, Upload, Check, RefreshCw, Calendar, Clock, AlertTriangle, Sparkles } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { 
+  X, Upload, Check, RefreshCw, Calendar, Clock, AlertTriangle, 
+  Sparkles, FileText, ClipboardList, Lock, Globe, Users, Settings2, Sliders 
+} from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { SUBJECT_PRESETS, MAX_QUESTION_LIMITS } from '../constants/subjectPresets';
+import { parseBatchAnswerText } from '../utils/answerParser';
 
 interface CreateExamModalProps {
   currentUser?: any;
+  examToEdit?: any;
   onClose: () => void;
   onSuccess: () => void;
 }
 
 export const CreateExamModal: React.FC<CreateExamModalProps> = ({
   currentUser,
+  examToEdit,
   onClose,
   onSuccess,
 }) => {
-  const [subject, setSubject] = useState<string>('Toán');
-  const defaultPreset = SUBJECT_PRESETS['Toán'];
+  const isEditing = Boolean(examToEdit);
 
-  const [title, setTitle] = useState('');
+  const [title, setTitle] = useState(examToEdit?.title || '');
+  const [subject, setSubject] = useState(examToEdit?.subject || 'Toán');
   const [teacherName, setTeacherName] = useState(
-    currentUser?.user_metadata?.full_name || 'Thầy Nguyễn Văn A'
+    examToEdit?.teacher_name || currentUser?.full_name || currentUser?.user_metadata?.full_name || 'Thầy Nguyễn Văn A'
   );
-  const [duration, setDuration] = useState(defaultPreset.duration);
-  const [pdfUrl, setPdfUrl] = useState('');
+  const [duration, setDuration] = useState<number>(examToEdit?.duration_minutes || 90);
+  const [pdfUrl, setPdfUrl] = useState(examToEdit?.pdf_url || '');
   const [isUploading, setIsUploading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Cấu hình số câu hỏi & Thang điểm từng phần (Được preset theo môn)
-  const [p1Count, setP1Count] = useState(defaultPreset.p1Count);
-  const [p1Score, setP1Score] = useState(defaultPreset.p1Score);
+  // Cấu hình số câu & điểm chuẩn ban đầu
+  const initialPreset = SUBJECT_PRESETS[examToEdit?.subject || 'Toán'] || SUBJECT_PRESETS['Toán'];
+  
+  const [p1Count, setP1Count] = useState<number>(
+    examToEdit?.config?.sections?.[0]?.question_count ?? initialPreset.p1Count
+  );
+  const [p2Count, setP2Count] = useState<number>(
+    examToEdit?.config?.sections?.[1]?.question_count ?? initialPreset.p2Count
+  );
+  const [p3Count, setP3Count] = useState<number>(
+    examToEdit?.config?.sections?.[2]?.question_count ?? initialPreset.p3Count
+  );
 
-  const [p2Count, setP2Count] = useState(defaultPreset.p2Count);
-  const [p2Score, setP2Score] = useState(defaultPreset.p2Score);
+  const [p1TotalScore, setP1TotalScore] = useState<number>(
+    examToEdit?.config?.sections?.[0]?.total_score ?? initialPreset.p1Score
+  );
+  const [p2TotalScore, setP2TotalScore] = useState<number>(
+    examToEdit?.config?.sections?.[1]?.total_score ?? initialPreset.p2Score
+  );
+  const [p3TotalScore, setP3TotalScore] = useState<number>(
+    examToEdit?.config?.sections?.[2]?.total_score ?? initialPreset.p3Score
+  );
 
-  const [p3Count, setP3Count] = useState(defaultPreset.p3Count);
-  const [p3Score, setP3Score] = useState(defaultPreset.p3Score);
+  // Đặt lịch mở & đóng đề
+  const [hasTimeLimit, setHasTimeLimit] = useState<boolean>(
+    Boolean(examToEdit?.start_at || examToEdit?.end_at)
+  );
+  const [startAt, setStartAt] = useState<string>(
+    examToEdit?.start_at ? new Date(examToEdit.start_at).toISOString().slice(0, 16) : ''
+  );
+  const [endAt, setEndAt] = useState<string>(
+    examToEdit?.end_at ? new Date(examToEdit.end_at).toISOString().slice(0, 16) : ''
+  );
 
-  // Khung thời gian mở / đóng đề thi
-  const [hasTimeLimit, setHasTimeLimit] = useState(false);
-  const [startAt, setStartAt] = useState('');
-  const [endAt, setEndAt] = useState('');
+  // Chế độ Public vs Private giao theo lớp
+  const [isPrivate, setIsPrivate] = useState<boolean>(examToEdit?.is_private || false);
+  const [availableClassrooms, setAvailableClassrooms] = useState<any[]>([]);
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
+
+  // Bảng tùy chỉnh nâng cao số câu và điểm
+  const [showScoreCustomizer, setShowScoreCustomizer] = useState<boolean>(false);
 
   // Đáp án chuẩn
-  const [p1Keys, setP1Keys] = useState<Record<number, string>>({});
-  const [p2Keys, setP2Keys] = useState<Record<number, Record<string, boolean>>>({});
-  const [p3Keys, setP3Keys] = useState<Record<number, string>>({});
+  const [answerKeys, setAnswerKeys] = useState<{
+    part_1: Record<number, string>;
+    part_2: Record<number, Record<string, boolean>>;
+    part_3: Record<number, string>;
+  }>({
+    part_1: examToEdit?.answer_keys?.part_1 || {},
+    part_2: examToEdit?.answer_keys?.part_2 || {},
+    part_3: examToEdit?.answer_keys?.part_3 || {},
+  });
 
-  // Khi giáo viên chọn môn học khác -> Tự động nạp Preset của môn đó
-  const handleSubjectChange = (newSub: string) => {
-    setSubject(newSub);
-    const preset = SUBJECT_PRESETS[newSub];
+  // Chế độ dán đáp án hàng loạt
+  const [batchMode, setBatchMode] = useState(false);
+  const [batchText, setBatchText] = useState('');
+  const [batchFeedback, setBatchFeedback] = useState<string | null>(null);
+
+  // Tải danh sách lớp học của giáo viên
+  useEffect(() => {
+    async function fetchClasses() {
+      if (!currentUser?.id) return;
+      const { data } = await supabase
+        .from('classrooms')
+        .select('*')
+        .eq('teacher_id', currentUser.id)
+        .order('name');
+      if (data) setAvailableClassrooms(data);
+
+      if (examToEdit?.id) {
+        const { data: assigned } = await supabase
+          .from('exam_assignments')
+          .select('class_id')
+          .eq('exam_id', examToEdit.id);
+        if (assigned) {
+          setSelectedClassIds(assigned.map((a: any) => a.class_id));
+        }
+      }
+    }
+    fetchClasses();
+  }, [currentUser, examToEdit]);
+
+  // SỬA LỖI PRESET: Tự nạp chuẩn số câu, thời gian và điểm chuẩn khi đổi môn học
+  const handleSubjectChange = (newSubject: string) => {
+    setSubject(newSubject);
+    const preset = SUBJECT_PRESETS[newSubject];
     if (preset) {
       setDuration(preset.duration);
       setP1Count(preset.p1Count);
-      setP1Score(preset.p1Score);
       setP2Count(preset.p2Count);
-      setP2Score(preset.p2Score);
       setP3Count(preset.p3Count);
-      setP3Score(preset.p3Score);
+
+      setP1TotalScore(preset.p1Score);
+      setP2TotalScore(preset.p2Score);
+      setP3TotalScore(preset.p3Score);
     }
   };
 
-  // Upload file PDF lên Supabase Storage
+  // Upload PDF
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (file.type !== 'application/pdf') {
+      alert('Chỉ cho phép tải lên tệp định dạng PDF!');
+      return;
+    }
+
     if (file.size > 15 * 1024 * 1024) {
-      alert('File PDF không được vượt quá 15MB để tối ưu dung lượng!');
+      alert('Tệp PDF vượt quá 15MB. Vui lòng nén file hoặc dán link Google Drive.');
       return;
     }
 
     setIsUploading(true);
     try {
-      const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '')}`;
-      const { error } = await supabase.storage
+      const ext = file.name.split('.').pop();
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+      const filePath = `exams/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
         .from('exam-pdfs')
-        .upload(fileName, file);
+        .upload(filePath, file, { cacheControl: '3600', upsert: false });
 
-      if (error) throw error;
+      if (uploadError) throw uploadError;
 
-      const { data: publicUrlData } = supabase.storage
+      const { data: { publicUrl } } = supabase.storage
         .from('exam-pdfs')
-        .getPublicUrl(fileName);
+        .getPublicUrl(filePath);
 
-      setPdfUrl(publicUrlData.publicUrl);
+      setPdfUrl(publicUrl);
     } catch (err: any) {
-      alert('Không thể tải file lên Storage: ' + err.message + '\nBạn có thể dán link PDF trực tiếp vào ô bên cạnh.');
+      alert('Lỗi tải file: ' + err.message);
     } finally {
       setIsUploading(false);
     }
   };
 
-  // Lưu kỳ thi
-  const handleSaveExam = async () => {
+  // Phân tích và cập nhật ngay vào bảng đáp án bên dưới
+  const handleBatchParse = () => {
+    const parsed = parseBatchAnswerText(batchText, { p1: p1Count, p2: p2Count, p3: p3Count });
+    if (parsed.errors.length > 0) {
+      alert('Lỗi: ' + parsed.errors.join(', '));
+      return;
+    }
+
+    // CẬP NHẬT TRẠNG THÁI Ô ĐÁP ÁN BÊN DƯỚI ĐỂ GIÁO VIÊN CHECK LẠI
+    setAnswerKeys({
+      part_1: { ...parsed.part_1 },
+      part_2: { ...parsed.part_2 },
+      part_3: { ...parsed.part_3 },
+    });
+
+    let msg = `✓ Đã nhận diện: ${parsed.summary.p1Count}/${p1Count} câu Phần I, ${parsed.summary.p2Count}/${p2Count} câu Phần II, ${parsed.summary.p3Count}/${p3Count} câu Phần III. Các ô bên dưới đã được điền tự động!`;
+    if (parsed.warnings.length > 0) {
+      msg += ' (' + parsed.warnings.join(' ') + ')';
+    }
+    setBatchFeedback(msg);
+  };
+
+  const handleFillSampleBatch = () => {
+    let sample = '';
+    if (p1Count > 0) {
+      const p1List = Array.from({ length: p1Count }, (_, i) => `${i + 1}A`).join(' ');
+      sample += `PHẦN I: ${p1List}\n`;
+    }
+    if (p2Count > 0) {
+      const p2List = Array.from({ length: p2Count }, (_, i) => `${i + 1}:DDDD`).join(' ');
+      sample += `PHẦN II: ${p2List}\n`;
+    }
+    if (p3Count > 0) {
+      const p3List = Array.from({ length: p3Count }, (_, i) => `${i + 1}:1.5`).join(' ');
+      sample += `PHẦN III: ${p3List}`;
+    }
+    setBatchText(sample.trim());
+  };
+
+  const updateKey = (part: 'part_1' | 'part_2' | 'part_3', qIdx: number, val: any, subKey?: string) => {
+    setAnswerKeys(prev => {
+      const nextPart = { ...(prev[part] || {}) };
+      if (part === 'part_2' && subKey) {
+        nextPart[qIdx] = { ...(nextPart[qIdx] || {}), [subKey]: val };
+      } else {
+        nextPart[qIdx] = val;
+      }
+      return { ...prev, [part]: nextPart };
+    });
+  };
+
+  // BẮT BUỘC GIÁO VIÊN PHẢI NHẬP TOÀN BỘ ĐÁP ÁN MỚI CHO PHÉP TẠO ĐỀ
+  const validateCompleteAnswers = () => {
+    if (p1Count > 0) {
+      const missingP1: number[] = [];
+      for (let q = 1; q <= p1Count; q++) {
+        if (!answerKeys.part_1[q] || !['A', 'B', 'C', 'D'].includes(answerKeys.part_1[q])) {
+          missingP1.push(q);
+        }
+      }
+      if (missingP1.length > 0) {
+        alert(`Chưa nhập đủ đáp án Phần I! Vui lòng chọn đáp án cho ${missingP1.length} câu còn thiếu: Câu ${missingP1.join(', ')}.`);
+        return false;
+      }
+    }
+
+    if (p2Count > 0) {
+      const missingP2: string[] = [];
+      for (let q = 1; q <= p2Count; q++) {
+        for (const sub of ['a', 'b', 'c', 'd']) {
+          if (answerKeys.part_2[q]?.[sub] === undefined || answerKeys.part_2[q]?.[sub] === null) {
+            missingP2.push(`C${q}${sub}`);
+          }
+        }
+      }
+      if (missingP2.length > 0) {
+        alert(`Chưa nhập đủ đáp án Đúng/Sai Phần II! Vui lòng chọn Đúng hoặc Sai cho các ý: ${missingP2.join(', ')}.`);
+        return false;
+      }
+    }
+
+    if (p3Count > 0) {
+      const missingP3: number[] = [];
+      for (let q = 1; q <= p3Count; q++) {
+        if (!answerKeys.part_3[q] || String(answerKeys.part_3[q]).trim() === '') {
+          missingP3.push(q);
+        }
+      }
+      if (missingP3.length > 0) {
+        alert(`Chưa nhập đủ đáp án Phần III! Vui lòng điền đáp số cho ${missingP3.length} câu còn thiếu: Câu ${missingP3.join(', ')}.`);
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  const totalScoreCalc = (p1TotalScore + p2TotalScore + p3TotalScore).toFixed(2);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!title.trim() || !pdfUrl.trim()) {
-      alert('Vui lòng nhập tiêu đề kỳ thi và cung cấp file PDF!');
+      alert('Vui lòng nhập tên đề thi và cung cấp file PDF!');
       return;
     }
 
-    if (p1Count > MAX_QUESTION_LIMITS.P1_MAX || p2Count > MAX_QUESTION_LIMITS.P2_MAX || p3Count > MAX_QUESTION_LIMITS.P3_MAX) {
-      alert(`Số câu hỏi vượt quá giới hạn tối đa cho phép (Phần I: ${MAX_QUESTION_LIMITS.P1_MAX}, Phần II: ${MAX_QUESTION_LIMITS.P2_MAX}, Phần III: ${MAX_QUESTION_LIMITS.P3_MAX})`);
+    if (isPrivate && selectedClassIds.length === 0) {
+      alert('Bạn đã chọn chế độ "Riêng tư theo lớp", vui lòng tích chọn ít nhất 1 lớp học!');
       return;
     }
 
-    if (hasTimeLimit && startAt && endAt && new Date(startAt) >= new Date(endAt)) {
-      alert('Thời gian bắt đầu mở đề phải trước thời gian kết thúc đóng đề!');
+    if (!validateCompleteAnswers()) {
       return;
     }
 
-    setIsSaving(true);
+    setIsSubmitting(true);
     try {
-      const config = {
+      const configPayload = {
         sections: [
-          { id: 'part_1', title: 'PHẦN I. Trắc nghiệm 4 lựa chọn', type: 'single_choice', question_count: p1Count, total_score: p1Score },
-          { id: 'part_2', title: 'PHẦN II. Trắc nghiệm Đúng / Sai', type: 'true_false_group', question_count: p2Count, total_score: p2Score },
-          { id: 'part_3', title: 'PHẦN III. Trả lời ngắn', type: 'short_answer', question_count: p3Count, total_score: p3Score },
-        ],
-        p1_total_score: p1Score,
-        p2_total_score: p2Score,
-        p3_total_score: p3Score,
+          { id: 'part_1', title: 'Trắc nghiệm 4 lựa chọn', question_count: p1Count, total_score: p1TotalScore },
+          { id: 'part_2', title: 'Trắc nghiệm Đúng / Sai', question_count: p2Count, total_score: p2TotalScore },
+          { id: 'part_3', title: 'Trả lời ngắn', question_count: p3Count, total_score: p3TotalScore },
+        ]
       };
 
-      const answerKeys = {
-        part_1: p1Keys,
-        part_2: p2Keys,
-        part_3: p3Keys,
-      };
-
-      const { error } = await supabase.from('exams').insert({
+      const examPayload = {
         title: title.trim(),
         subject,
-        duration_minutes: duration,
-        teacher_name: teacherName.trim() || 'Giáo viên',
+        teacher_name: teacherName.trim() || 'Thầy Nguyễn Văn A',
         created_by: currentUser?.id || null,
+        duration_minutes: duration,
         pdf_url: pdfUrl.trim(),
+        config: configPayload,
+        answer_keys: answerKeys,
         start_at: hasTimeLimit && startAt ? new Date(startAt).toISOString() : null,
         end_at: hasTimeLimit && endAt ? new Date(endAt).toISOString() : null,
-        config,
-        answer_keys: answerKeys,
-        is_active: true,
-      });
+        is_private: isPrivate,
+        updated_at: new Date().toISOString(),
+      };
 
-      if (error) throw error;
-      alert('Đã tạo kỳ thi thành công!');
+      let examId = examToEdit?.id;
+
+      if (isEditing) {
+        const { error } = await supabase.from('exams').update(examPayload).eq('id', examId);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase.from('exams').insert(examPayload).select().single();
+        if (error) throw error;
+        examId = data.id;
+      }
+
+      if (examId) {
+        await supabase.from('exam_assignments').delete().eq('exam_id', examId);
+        if (selectedClassIds.length > 0) {
+          const assignRows = selectedClassIds.map(classId => ({
+            exam_id: examId,
+            class_id: classId,
+            start_at: hasTimeLimit && startAt ? new Date(startAt).toISOString() : null,
+            end_at: hasTimeLimit && endAt ? new Date(endAt).toISOString() : null,
+          }));
+          await supabase.from('exam_assignments').insert(assignRows);
+        }
+      }
+
+      alert(isEditing ? 'Đã cập nhật kỳ thi thành công!' : 'Đã tạo kỳ thi mới thành công!');
       onSuccess();
     } catch (err: any) {
-      alert('Lỗi lưu đề thi: ' + err.message);
+      alert('Không thể lưu kỳ thi: ' + err.message);
     } finally {
-      setIsSaving(false);
+      setIsSubmitting(false);
     }
   };
 
-  const totalExamScore = Math.round((p1Score + p2Score + p3Score) * 10) / 10;
-
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl max-w-3xl w-full p-6 max-h-[92vh] flex flex-col shadow-2xl">
-        
-        {/* HEADER */}
-        <div className="flex justify-between items-center pb-4 border-b border-gray-100">
-          <div>
-            <h2 className="text-lg font-bold text-gray-900">Thiết Lập Kỳ Thi & Preset Đa Môn Học</h2>
-            <p className="text-xs text-gray-500">Tự động cấu hình chuẩn theo quy chế Bộ Giáo dục & Đào tạo từ 2025</p>
-          </div>
-          <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500">
-            <X className="w-5 h-5" />
-          </button>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 font-sans text-[#121212]">
+      <div className="bg-white rounded-3xl max-w-3xl w-full p-6 max-h-[92vh] flex flex-col shadow-2xl relative">
+        <button
+          onClick={onClose}
+          className="absolute top-5 right-5 w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 font-bold"
+        >
+          <X className="w-4 h-4" />
+        </button>
+
+        <div className="pb-3 border-b border-gray-100">
+          <h3 className="font-extrabold text-base md:text-lg text-gray-900 leading-tight">
+            {isEditing ? 'Chỉnh Sửa Kỳ Thi' : 'Thiết Lập Kỳ Thi & Preset Đa Môn Học'}
+          </h3>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Tự động cấu hình chuẩn theo quy chế Bộ Giáo dục & Đào tạo từ 2025
+          </p>
         </div>
 
-        {/* CONTENT */}
-        <div className="flex-1 overflow-y-auto py-4 space-y-6 text-xs pr-1">
-          
-          {/* 1. THÔNG TIN CƠ BẢN */}
-          <div className="bg-[#FAFAFA] p-4 rounded-2xl border border-gray-200 grid grid-cols-3 gap-3">
-            <div className="col-span-2">
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto py-4 space-y-4 text-xs pr-1">
+          {/* HÀNG 1: TÊN ĐỀ & GIÁO VIÊN */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="md:col-span-2">
               <label className="font-bold text-gray-700 block mb-1">Tên kỳ thi / Đề thi *</label>
               <input
                 type="text"
@@ -182,32 +372,32 @@ export const CreateExamModal: React.FC<CreateExamModalProps> = ({
                 placeholder="VD: Khảo Sát Chất Lượng Đầu Năm Môn Toán 12"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:border-[#1DB954] focus:outline-none"
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#1DB954]"
               />
             </div>
-
             <div>
               <label className="font-bold text-gray-700 block mb-1">Thầy / Cô giao đề</label>
               <input
                 type="text"
+                placeholder="VD: Thầy Nguyễn Văn A"
                 value={teacherName}
                 onChange={(e) => setTeacherName(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:border-[#1DB954] focus:outline-none"
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#1DB954]"
               />
             </div>
+          </div>
 
-            {/* DROPDOWN CHỌN MÔN HỌC */}
+          {/* HÀNG 2: MÔN HỌC & THỜI GIAN */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
             <div>
               <label className="font-bold text-gray-700 block mb-1">Môn học thi (Preset tự động) *</label>
               <select
                 value={subject}
                 onChange={(e) => handleSubjectChange(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:border-[#1DB954] focus:outline-none font-bold text-gray-800"
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#1DB954] font-bold text-gray-900"
               >
-                {Object.keys(SUBJECT_PRESETS).map((subKey) => (
-                  <option key={subKey} value={subKey}>
-                    {subKey}
-                  </option>
+                {Object.keys(SUBJECT_PRESETS).map(sub => (
+                  <option key={sub} value={sub}>{sub}</option>
                 ))}
               </select>
             </div>
@@ -216,301 +406,463 @@ export const CreateExamModal: React.FC<CreateExamModalProps> = ({
               <label className="font-bold text-gray-700 block mb-1">Thời gian làm bài (Phút)</label>
               <input
                 type="number"
+                required
+                min={5}
+                max={180}
                 value={duration}
-                onChange={(e) => setDuration(Number(e.target.value))}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:border-[#1DB954] focus:outline-none text-center font-bold"
+                onChange={(e) => setDuration(parseInt(e.target.value, 10) || 0)}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#1DB954] font-mono text-center font-bold"
               />
             </div>
 
-            <div className="flex flex-col justify-end">
-              <div className="bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-xl text-center">
-                <span className="text-[10px] text-gray-500 font-semibold block">Tổng điểm toàn bài</span>
-                <span className="text-sm font-extrabold text-[#15803D]">{totalExamScore} điểm</span>
-              </div>
+            <div className="bg-emerald-50/70 p-2 rounded-xl border border-emerald-200 text-center">
+              <span className="text-[10px] text-gray-500 uppercase block font-bold">Thang điểm tổng</span>
+              <span className="text-base font-extrabold text-[#15803D]">
+                {totalScoreCalc} điểm
+              </span>
             </div>
           </div>
 
-          {/* 2. GIỚI HẠN KHUNG THỜI GIAN MỞ / ĐÓNG ĐỀ THI */}
-          <div className="bg-[#FAFAFA] p-4 rounded-2xl border border-gray-200">
-            <div className="flex items-center justify-between mb-2">
-              <label className="flex items-center space-x-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={hasTimeLimit}
-                  onChange={(e) => setHasTimeLimit(e.target.checked)}
-                  className="rounded text-[#1DB954] focus:ring-[#1DB954] w-4 h-4"
-                />
-                <span className="font-bold text-gray-800">Đặt lịch mở & đóng đề thi (Giới hạn thời hạn nộp)</span>
-              </label>
-              {hasTimeLimit && (
-                <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                  Tự động khóa khi hết hạn
-                </span>
-              )}
+          {/* HÀNG 3: TÙY CHỈNH NÂNG CAO SỐ CÂU & ĐIỂM TỪNG PHẦN */}
+          <div className="p-3.5 bg-gray-50 rounded-2xl border border-gray-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-gray-800 flex items-center space-x-1.5">
+                <Sliders className="w-4 h-4 text-[#1DB954]" />
+                <span>Cấu hình số câu & điểm từng phần (Tùy biến thang đo)</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowScoreCustomizer(!showScoreCustomizer)}
+                className="text-xs text-[#15803D] hover:underline font-bold"
+              >
+                {showScoreCustomizer ? 'Thu gọn' : 'Tùy chỉnh số câu/điểm'}
+              </button>
             </div>
 
+            {showScoreCustomizer && (
+              <div className="pt-2 border-t border-gray-200 space-y-3 animate-in fade-in duration-200">
+                {/* PHẦN I CUSTOM */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-white p-2.5 rounded-xl border border-gray-200 items-center">
+                  <span className="font-bold text-gray-700">Phần I (Trắc nghiệm 4 lựa chọn)</span>
+                  <div className="flex items-center space-x-1">
+                    <span className="text-gray-500 text-[11px]">Số câu:</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={60}
+                      value={p1Count}
+                      onChange={(e) => setP1Count(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                      className="w-16 px-2 py-1 bg-gray-50 border border-gray-200 rounded-lg text-center font-bold font-mono"
+                    />
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <span className="text-gray-500 text-[11px]">Tổng điểm:</span>
+                    <input
+                      type="number"
+                      step={0.25}
+                      min={0}
+                      value={p1TotalScore}
+                      onChange={(e) => setP1TotalScore(Math.max(0, parseFloat(e.target.value) || 0))}
+                      className="w-16 px-2 py-1 bg-gray-50 border border-gray-200 rounded-lg text-center font-bold font-mono text-[#1DB954]"
+                    />
+                    <span className="text-[10px] text-gray-400">
+                      ({p1Count > 0 ? (p1TotalScore / p1Count).toFixed(3) : 0}đ/câu)
+                    </span>
+                  </div>
+                </div>
+
+                {/* PHẦN II CUSTOM */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-white p-2.5 rounded-xl border border-gray-200 items-center">
+                  <span className="font-bold text-gray-700">Phần II (Đúng / Sai)</span>
+                  <div className="flex items-center space-x-1">
+                    <span className="text-gray-500 text-[11px]">Số câu:</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={10}
+                      value={p2Count}
+                      onChange={(e) => setP2Count(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                      className="w-16 px-2 py-1 bg-gray-50 border border-gray-200 rounded-lg text-center font-bold font-mono"
+                    />
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <span className="text-gray-500 text-[11px]">Tổng điểm:</span>
+                    <input
+                      type="number"
+                      step={0.25}
+                      min={0}
+                      value={p2TotalScore}
+                      onChange={(e) => setP2TotalScore(Math.max(0, parseFloat(e.target.value) || 0))}
+                      className="w-16 px-2 py-1 bg-gray-50 border border-gray-200 rounded-lg text-center font-bold font-mono text-[#1DB954]"
+                    />
+                    <span className="text-[10px] text-gray-400">
+                      ({p2Count > 0 ? (p2TotalScore / p2Count).toFixed(2) : 0}đ/câu)
+                    </span>
+                  </div>
+                </div>
+
+                {/* PHẦN III CUSTOM */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-white p-2.5 rounded-xl border border-gray-200 items-center">
+                  <span className="font-bold text-gray-700">Phần III (Trả lời ngắn)</span>
+                  <div className="flex items-center space-x-1">
+                    <span className="text-gray-500 text-[11px]">Số câu:</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={20}
+                      value={p3Count}
+                      onChange={(e) => setP3Count(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                      className="w-16 px-2 py-1 bg-gray-50 border border-gray-200 rounded-lg text-center font-bold font-mono"
+                    />
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <span className="text-gray-500 text-[11px]">Tổng điểm:</span>
+                    <input
+                      type="number"
+                      step={0.25}
+                      min={0}
+                      value={p3TotalScore}
+                      onChange={(e) => setP3TotalScore(Math.max(0, parseFloat(e.target.value) || 0))}
+                      className="w-16 px-2 py-1 bg-gray-50 border border-gray-200 rounded-lg text-center font-bold font-mono text-[#1DB954]"
+                    />
+                    <span className="text-[10px] text-gray-400">
+                      ({p3Count > 0 ? (p3TotalScore / p3Count).toFixed(3) : 0}đ/câu)
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* HÀNG 4: PHẠM VI GIAO ĐỀ (PUBLIC VS PRIVATE) */}
+          <div className="p-3.5 bg-gray-50 rounded-2xl border border-gray-200 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-gray-800 flex items-center space-x-1.5">
+                <Users className="w-4 h-4 text-[#1DB954]" />
+                <span>Phạm vi giao đề</span>
+              </span>
+              <div className="inline-flex rounded-xl p-0.5 bg-white border border-gray-200 space-x-1">
+                <button
+                  type="button"
+                  onClick={() => setIsPrivate(false)}
+                  className={`px-3 py-1 rounded-lg font-bold text-xs transition-all ${
+                    !isPrivate ? 'bg-[#1DB954] text-white shadow-xs' : 'text-gray-600 hover:text-black'
+                  }`}
+                >
+                  <Globe className="w-3.5 h-3.5 inline mr-1" />
+                  <span>Công khai</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsPrivate(true)}
+                  className={`px-3 py-1 rounded-lg font-bold text-xs transition-all ${
+                    isPrivate ? 'bg-[#1DB954] text-white shadow-xs' : 'text-gray-600 hover:text-black'
+                  }`}
+                >
+                  <Lock className="w-3.5 h-3.5 inline mr-1" />
+                  <span>Riêng tư theo lớp</span>
+                </button>
+              </div>
+            </div>
+
+            {isPrivate && (
+              <div className="pt-2 border-t border-gray-200/60 animate-in fade-in">
+                <span className="text-[11px] text-gray-500 block mb-1.5 font-semibold">
+                  Chọn các lớp học được phép tham gia kỳ thi này:
+                </span>
+                {availableClassrooms.length === 0 ? (
+                  <p className="text-[11px] text-amber-700 italic">
+                    Bạn chưa tạo lớp học nào. Hãy tạo lớp học trước tại mục "Quản lý Lớp" trên thanh menu.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {availableClassrooms.map(cls => {
+                      const isChecked = selectedClassIds.includes(cls.id);
+                      return (
+                        <label
+                          key={cls.id}
+                          className={`p-2 rounded-xl border flex items-center space-x-2 cursor-pointer transition-all ${
+                            isChecked ? 'bg-emerald-50 border-[#1DB954] text-[#15803D] font-bold' : 'bg-white border-gray-200 text-gray-700'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedClassIds([...selectedClassIds, cls.id]);
+                              } else {
+                                setSelectedClassIds(selectedClassIds.filter(id => id !== cls.id));
+                              }
+                            }}
+                            className="rounded text-[#1DB954] focus:ring-0"
+                          />
+                          <span className="text-xs truncate">{cls.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* HÀNG 5: ĐẶT LỊCH MỞ / ĐÓNG ĐỀ */}
+          <div className="p-3 bg-gray-50 rounded-2xl border border-gray-200 space-y-2">
+            <label className="flex items-center space-x-2 cursor-pointer font-bold text-gray-800">
+              <input
+                type="checkbox"
+                checked={hasTimeLimit}
+                onChange={(e) => setHasTimeLimit(e.target.checked)}
+                className="rounded text-[#1DB954] focus:ring-0"
+              />
+              <span>Đặt lịch mở & đóng đề thi (Giới hạn thời hạn nộp)</span>
+            </label>
+
             {hasTimeLimit && (
-              <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-gray-200">
+              <div className="grid grid-cols-2 gap-3 pt-1">
                 <div>
-                  <label className="font-semibold text-gray-700 block mb-1 flex items-center space-x-1">
-                    <Calendar className="w-3.5 h-3.5 text-gray-500" />
-                    <span>Thời điểm bắt đầu mở đề:</span>
-                  </label>
+                  <span className="text-[11px] text-gray-500 block mb-1">Thời điểm mở đề:</span>
                   <input
                     type="datetime-local"
                     value={startAt}
                     onChange={(e) => setStartAt(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-xl focus:border-[#1DB954] focus:outline-none"
+                    className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-xl"
                   />
                 </div>
                 <div>
-                  <label className="font-semibold text-gray-700 block mb-1 flex items-center space-x-1">
-                    <Clock className="w-3.5 h-3.5 text-gray-500" />
-                    <span>Thời điểm kết thúc / đóng đề:</span>
-                  </label>
+                  <span className="text-[11px] text-gray-500 block mb-1">Hạn chót đóng đề:</span>
                   <input
                     type="datetime-local"
                     value={endAt}
                     onChange={(e) => setEndAt(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-xl focus:border-[#1DB954] focus:outline-none"
+                    className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-xl"
                   />
                 </div>
               </div>
             )}
           </div>
 
-          {/* 3. ĐƯỜNG DẪN PDF */}
+          {/* HÀNG 6: FILE ĐỀ THI PDF */}
           <div>
             <label className="font-bold text-gray-700 block mb-1">File Đề thi PDF *</label>
             <div className="flex space-x-2">
               <input
                 type="text"
+                required
                 placeholder="Dán link file PDF (Google Drive, URL) hoặc tải file..."
                 value={pdfUrl}
                 onChange={(e) => setPdfUrl(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-200 rounded-xl focus:border-[#1DB954] focus:outline-none"
+                className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#1DB954]"
               />
-              <label className="cursor-pointer bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-xl font-semibold flex items-center space-x-1.5 transition-all">
-                {isUploading ? <RefreshCw className="w-4 h-4 animate-spin text-[#1DB954]" /> : <Upload className="w-4 h-4 text-gray-600" />}
+              <label className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-3.5 py-2 rounded-xl cursor-pointer flex items-center space-x-1.5 flex-shrink-0">
+                <Upload className="w-3.5 h-3.5" />
                 <span>{isUploading ? 'Đang tải...' : 'Upload PDF'}</span>
                 <input type="file" accept="application/pdf" onChange={handlePdfUpload} className="hidden" />
               </label>
             </div>
           </div>
 
-          {/* ===================== 4. CẤU HÌNH PHẦN I ===================== */}
-          <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200">
-            <div className="flex justify-between items-center mb-3">
-              <div>
-                <span className="font-bold text-gray-900 text-sm">PHẦN I: Trắc nghiệm 4 lựa chọn</span>
-                <span className="text-gray-500 text-[11px] block">
-                  Mỗi câu: {p1Count > 0 ? (p1Score / p1Count).toFixed(3) : 0} điểm
-                </span>
-              </div>
-              <div className="flex items-center space-x-3">
-                <div className="flex items-center space-x-1">
-                  <span className="text-gray-500">Số câu (Max 60):</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={MAX_QUESTION_LIMITS.P1_MAX}
-                    value={p1Count}
-                    onChange={(e) => setP1Count(Math.min(MAX_QUESTION_LIMITS.P1_MAX, Math.max(0, Number(e.target.value))))}
-                    className="w-14 px-2 py-0.5 border rounded bg-white text-center font-bold"
-                  />
-                </div>
-                <div className="flex items-center space-x-1">
-                  <span className="text-gray-500">Tổng điểm:</span>
-                  <input
-                    type="number"
-                    step={0.1}
-                    value={p1Score}
-                    onChange={(e) => setP1Score(Number(e.target.value))}
-                    className="w-16 px-2 py-0.5 border rounded bg-white text-center font-bold text-[#1DB954]"
-                  />
-                </div>
-              </div>
+          {/* HÀNG 7: DÁN ĐÁP ÁN HÀNG LOẠT */}
+          <div className="border-t border-gray-100 pt-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-extrabold text-sm text-gray-900">Thiết lập đáp án chuẩn</span>
+              <button
+                type="button"
+                onClick={() => setBatchMode(!batchMode)}
+                className="text-xs bg-emerald-50 text-[#15803D] hover:bg-emerald-100 border border-emerald-200 px-3 py-1 rounded-full font-bold flex items-center space-x-1 transition-all"
+              >
+                <ClipboardList className="w-3.5 h-3.5" />
+                <span>{batchMode ? 'Đóng chế độ dán nhanh' : 'Dán đáp án hàng loạt (1-Click)'}</span>
+              </button>
             </div>
 
-            {p1Count > 0 ? (
-              <div className="grid grid-cols-6 gap-2 pt-2 border-t border-gray-200">
-                {Array.from({ length: p1Count }, (_, i) => i + 1).map((qIdx) => (
-                  <div key={qIdx} className="flex items-center space-x-1 bg-white p-1 rounded-lg border">
-                    <span className="font-bold text-[11px] text-gray-600 w-6">C{qIdx}:</span>
-                    <select
-                      value={p1Keys[qIdx] || ''}
-                      onChange={(e) => setP1Keys({ ...p1Keys, [qIdx]: e.target.value })}
-                      className="w-full bg-transparent font-bold text-gray-800 focus:outline-none"
-                    >
-                      <option value="">-</option>
-                      <option value="A">A</option>
-                      <option value="B">B</option>
-                      <option value="C">C</option>
-                      <option value="D">D</option>
-                    </select>
-                  </div>
-                ))}
+            {batchMode && (
+              <div className="p-3.5 bg-gray-50 border-2 border-dashed border-[#1DB954]/50 rounded-2xl space-y-2.5 mb-4 animate-in fade-in">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-[11px] text-gray-700">Dán chuỗi đáp án từ Word / Excel / Text:</span>
+                  <button
+                    type="button"
+                    onClick={handleFillSampleBatch}
+                    className="text-[10px] text-[#1DB954] hover:underline font-bold"
+                  >
+                    Dán định dạng mẫu
+                  </button>
+                </div>
+                <textarea
+                  rows={4}
+                  placeholder={`Ví dụ định dạng dễ nhập:
+PHẦN I: 1A 2B 3C 4D 5A 6B 7C 8D 9A 10B 11C 12D
+PHẦN II: 1:DDDD 2:DDDD 3:DDDD 4:DDDD
+PHẦN III: 1:1,5 2:1.5 3:-1 4:-1 5:-1 6:-1`}
+                  value={batchText}
+                  onChange={(e) => setBatchText(e.target.value)}
+                  className="w-full p-2.5 text-[11px] font-mono bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#1DB954]"
+                />
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-gray-400">Tự động nhận diện cả trên cùng 1 dòng và cập nhật xuống các ô bên dưới</span>
+                  <button
+                    type="button"
+                    onClick={handleBatchParse}
+                    className="bg-[#1DB954] hover:bg-[#169C46] text-white px-3.5 py-1.5 rounded-xl font-bold text-xs shadow-xs"
+                  >
+                    Phân tích & Tự động điền
+                  </button>
+                </div>
+                {batchFeedback && (
+                  <p className="text-[11px] text-emerald-800 font-semibold bg-emerald-50 p-2 rounded-xl border border-emerald-200">
+                    {batchFeedback}
+                  </p>
+                )}
               </div>
-            ) : (
-              <p className="text-gray-400 italic text-[11px]">Môn học này không có Phần I.</p>
             )}
-          </div>
 
-          {/* ===================== 5. CẤU HÌNH PHẦN II ===================== */}
-          <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200">
-            <div className="flex justify-between items-center mb-3">
-              <div>
-                <span className="font-bold text-gray-900 text-sm">PHẦN II: Trắc nghiệm Đúng / Sai (4 ý a, b, c, d)</span>
-                <span className="text-gray-500 text-[11px] block">
-                  Mỗi câu: {p2Count > 0 ? (p2Score / p2Count).toFixed(2) : 0} điểm (Áp dụng lũy tiến 10% - 25% - 50% - 100%)
-                </span>
-              </div>
-              <div className="flex items-center space-x-3">
-                <div className="flex items-center space-x-1">
-                  <span className="text-gray-500">Số câu (Max 10):</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={MAX_QUESTION_LIMITS.P2_MAX}
-                    value={p2Count}
-                    onChange={(e) => setP2Count(Math.min(MAX_QUESTION_LIMITS.P2_MAX, Math.max(0, Number(e.target.value))))}
-                    className="w-14 px-2 py-0.5 border rounded bg-white text-center font-bold"
-                  />
+            {/* BẢNG ĐÁP ÁN TRỰC QUAN */}
+            <div className="space-y-4">
+              {/* PHẦN I */}
+              {p1Count > 0 && (
+                <div className="p-3 bg-white border border-gray-200 rounded-2xl space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-xs text-gray-800">
+                      PHẦN I: Trắc nghiệm 4 lựa chọn ({p1Count} câu)
+                    </span>
+                    <span className="text-xs text-gray-500 font-mono">
+                      Mỗi câu: {(p1TotalScore / (p1Count || 1)).toFixed(3)}đ (chia đều)
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-1.5">
+                    {Array.from({ length: p1Count }, (_, i) => i + 1).map(q => {
+                      const val = answerKeys.part_1[q] || '';
+                      return (
+                        <div key={q} className={`flex items-center space-x-1 p-1.5 rounded-xl border transition-all ${
+                          val ? 'bg-emerald-50/60 border-emerald-300' : 'bg-gray-50 border-gray-100'
+                        }`}>
+                          <span className="text-[10px] font-bold text-gray-500 w-5">C{q}:</span>
+                          <select
+                            value={val}
+                            onChange={(e) => updateKey('part_1', q, e.target.value)}
+                            className={`w-full border rounded-lg text-xs font-bold text-center py-0.5 focus:outline-none ${
+                              val ? 'bg-white border-[#1DB954] text-[#15803D]' : 'bg-white border-gray-200 text-gray-500'
+                            }`}
+                          >
+                            <option value="">-</option>
+                            <option value="A">A</option>
+                            <option value="B">B</option>
+                            <option value="C">C</option>
+                            <option value="D">D</option>
+                          </select>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="flex items-center space-x-1">
-                  <span className="text-gray-500">Tổng điểm:</span>
-                  <input
-                    type="number"
-                    step={0.1}
-                    value={p2Score}
-                    onChange={(e) => setP2Score(Number(e.target.value))}
-                    className="w-16 px-2 py-0.5 border rounded bg-white text-center font-bold text-[#1DB954]"
-                  />
+              )}
+
+              {/* PHẦN II */}
+              {p2Count > 0 && (
+                <div className="p-3 bg-white border border-gray-200 rounded-2xl space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-xs text-gray-800">
+                      PHẦN II: Trắc nghiệm Đúng / Sai ({p2Count} câu)
+                    </span>
+                    <span className="text-xs text-gray-500 font-mono">
+                      Mỗi câu: {(p2TotalScore / (p2Count || 1)).toFixed(2)}đ (Lũy tiến 10% - 25% - 50% - 100%)
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {Array.from({ length: p2Count }, (_, i) => i + 1).map(q => (
+                      <div key={q} className="bg-gray-50 p-2.5 rounded-xl border border-gray-100 space-y-1">
+                        <span className="font-bold text-xs text-gray-700 block">Câu {q}:</span>
+                        <div className="grid grid-cols-4 gap-1">
+                          {['a', 'b', 'c', 'd'].map(sub => {
+                            const val = answerKeys.part_2[q]?.[sub];
+                            return (
+                              <div key={sub} className="flex items-center justify-between bg-white p-1 rounded-lg border border-gray-200 text-[10px]">
+                                <span className="font-bold text-gray-600">{sub}:</span>
+                                <div className="space-x-0.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateKey('part_2', q, true, sub)}
+                                    className={`px-1.5 py-0.5 rounded font-bold transition-all ${
+                                      val === true ? 'bg-[#1DB954] text-white shadow-xs' : 'text-gray-500 hover:bg-gray-100'
+                                    }`}
+                                  >
+                                    Đ
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateKey('part_2', q, false, sub)}
+                                    className={`px-1.5 py-0.5 rounded font-bold transition-all ${
+                                      val === false ? 'bg-rose-500 text-white shadow-xs' : 'text-gray-500 hover:bg-gray-100'
+                                    }`}
+                                  >
+                                    S
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* PHẦN III */}
+              {p3Count > 0 && (
+                <div className="p-3 bg-white border border-gray-200 rounded-2xl space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-xs text-gray-800">
+                      PHẦN III: Trả lời ngắn ({p3Count} câu)
+                    </span>
+                    <span className="text-xs text-gray-500 font-mono">
+                      Mỗi câu: {(p3TotalScore / (p3Count || 1)).toFixed(3)}đ (chia đều)
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                    {Array.from({ length: p3Count }, (_, i) => i + 1).map(q => {
+                      const val = answerKeys.part_3[q] || '';
+                      return (
+                        <div key={q} className={`p-2 rounded-xl border transition-all ${
+                          val ? 'bg-emerald-50/60 border-emerald-300' : 'bg-gray-50 border-gray-100'
+                        }`}>
+                          <span className="text-[10px] font-bold text-gray-500 block">Câu {q}:</span>
+                          <input
+                            type="text"
+                            placeholder="Đáp số"
+                            value={val}
+                            onChange={(e) => updateKey('part_3', q, e.target.value)}
+                            className="w-full mt-1 px-2 py-1 bg-white border border-gray-200 rounded-lg text-xs font-mono text-center focus:outline-none focus:border-[#1DB954]"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
-
-            {p2Count > 0 ? (
-              <div className="space-y-2 pt-2 border-t border-gray-200">
-                {Array.from({ length: p2Count }, (_, i) => i + 1).map((qIdx) => (
-                  <div key={qIdx} className="flex items-center justify-between bg-white p-2 rounded-xl border">
-                    <span className="font-bold text-gray-700 w-14">Câu {qIdx}:</span>
-                    <div className="flex space-x-3">
-                      {['a', 'b', 'c', 'd'].map((sub) => {
-                        const currentVal = p2Keys[qIdx]?.[sub];
-                        return (
-                          <div key={sub} className="flex items-center space-x-1">
-                            <span className="text-gray-500 font-semibold">{sub}:</span>
-                            <button
-                              type="button"
-                              onClick={() => setP2Keys({
-                                ...p2Keys,
-                                [qIdx]: { ...p2Keys[qIdx], [sub]: true }
-                              })}
-                              className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                                currentVal === true ? 'bg-[#1DB954] text-white' : 'bg-gray-100 text-gray-600'
-                              }`}
-                            >
-                              Đ
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setP2Keys({
-                                ...p2Keys,
-                                [qIdx]: { ...p2Keys[qIdx], [sub]: false }
-                              })}
-                              className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                                currentVal === false ? 'bg-[#1DB954] text-white' : 'bg-gray-100 text-gray-600'
-                              }`}
-                            >
-                              S
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-400 italic text-[11px]">Môn học này không có Phần II.</p>
-            )}
           </div>
 
-          {/* ===================== 6. CẤU HÌNH PHẦN III ===================== */}
-          <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200">
-            <div className="flex justify-between items-center mb-3">
-              <div>
-                <span className="font-bold text-gray-900 text-sm">PHẦN III: Trả lời ngắn</span>
-                <span className="text-gray-500 text-[11px] block">
-                  Mỗi câu: {p3Count > 0 ? (p3Score / p3Count).toFixed(3) : 0} điểm
-                </span>
-              </div>
-              <div className="flex items-center space-x-3">
-                <div className="flex items-center space-x-1">
-                  <span className="text-gray-500">Số câu (Max 20):</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={MAX_QUESTION_LIMITS.P3_MAX}
-                    value={p3Count}
-                    onChange={(e) => setP3Count(Math.min(MAX_QUESTION_LIMITS.P3_MAX, Math.max(0, Number(e.target.value))))}
-                    className="w-14 px-2 py-0.5 border rounded bg-white text-center font-bold"
-                  />
-                </div>
-                <div className="flex items-center space-x-1">
-                  <span className="text-gray-500">Tổng điểm:</span>
-                  <input
-                    type="number"
-                    step={0.1}
-                    value={p3Score}
-                    onChange={(e) => setP3Score(Number(e.target.value))}
-                    className="w-16 px-2 py-0.5 border rounded bg-white text-center font-bold text-[#1DB954]"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {p3Count > 0 ? (
-              <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-200">
-                {Array.from({ length: p3Count }, (_, i) => i + 1).map((qIdx) => (
-                  <div key={qIdx} className="flex items-center space-x-1 bg-white p-1.5 rounded-xl border">
-                    <span className="font-bold text-[11px] text-gray-600 w-8">C{qIdx}:</span>
-                    <input
-                      type="text"
-                      placeholder="Đáp số..."
-                      value={p3Keys[qIdx] || ''}
-                      onChange={(e) => setP3Keys({ ...p3Keys, [qIdx]: e.target.value })}
-                      className="w-full text-center font-mono font-bold text-gray-800 focus:outline-none"
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-400 italic text-[11px]">Môn học này không có Phần III.</p>
-            )}
+          {/* NÚT SUBMIT */}
+          <div className="flex justify-end space-x-2 pt-3 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl text-gray-600 font-bold hover:bg-gray-100"
+            >
+              Hủy
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-6 py-2 rounded-xl bg-[#1DB954] hover:bg-[#169C46] text-white font-bold shadow-sm flex items-center space-x-1.5"
+            >
+              {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              <span>{isEditing ? 'Lưu cập nhật kỳ thi' : 'Tạo kỳ thi ngay'}</span>
+            </button>
           </div>
-
-        </div>
-
-        {/* FOOTER */}
-        <div className="pt-4 border-t flex justify-end space-x-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-full border border-gray-200 font-semibold text-gray-600 hover:bg-gray-50"
-          >
-            Hủy
-          </button>
-          <button
-            onClick={handleSaveExam}
-            disabled={isSaving}
-            className="px-6 py-2 rounded-full bg-[#1DB954] hover:bg-[#169C46] text-white font-bold shadow-sm transition-all flex items-center space-x-2"
-          >
-            {isSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            <span>{isSaving ? 'Đang tạo...' : 'Tạo kỳ thi'}</span>
-          </button>
-        </div>
-
+        </form>
       </div>
     </div>
   );
