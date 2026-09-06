@@ -23,15 +23,11 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
   className,
   onExit,
 }) => {
-  // 1. Quản lý chia đôi màn hình Desktop
   const [splitRatio, setSplitRatio] = useState<number>(55);
   const [isDragging, setIsDragging] = useState<boolean>(false);
-
-  // 2. Quản lý xem trên Mobile (Bottom Sheet trượt trong cùng 1 tab để không bị phạt gian lận)
   const [isMobileSheetOpen, setIsMobileSheetOpen] = useState<boolean>(false);
   const [useGoogleViewer, setUseGoogleViewer] = useState<boolean>(true);
 
-  // 3. Token phiên thi
   const [sessionToken] = useState<string>(() => {
     const key = `session_${examId}_${studentName.trim()}_${className.trim()}`;
     const existing = localStorage.getItem(key);
@@ -87,6 +83,8 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
 
       if (data) {
         setExam(data);
+
+        // Chỉ cảnh báo nếu giáo viên CÓ ĐẶT HẠN NỘP (end_at khác null)
         if (data.end_at && new Date() > new Date(data.end_at)) {
           alert('Kỳ thi này đã kết thúc thời hạn nộp bài!');
         }
@@ -121,18 +119,18 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
     init();
   }, [examId, sessionToken]);
 
+  // Nộp bài khi hết giờ (Có kiểm tra chặt chẽ, không tự nộp lúc 0s khởi tạo)
   const handleTimeOut = useCallback(() => {
-    if (!isSubmitted) {
+    if (!isSubmitted && exam && exam.duration_minutes > 0) {
       alert('Đã hết thời gian làm bài! Hệ thống tự động nộp bài của bạn.');
       handleFinalSubmit();
     }
-  }, [isSubmitted]);
+  }, [isSubmitted, exam]);
 
-  // SỬA LỖI 93 PHÚT: Lấy chính xác thời gian thi do giáo viên thiết lập (Ví dụ: 50 phút Lý, 50 phút Anh, 90 phút Toán)
+  // Lấy thời gian từ đề thi thật (không bao giờ gán cứng 93)
   const duration = exam?.duration_minutes || 0;
   const timeLeft = useExamTimer(duration, `${examId}_${sessionToken}`, handleTimeOut, isSubmitted);
 
-  // Kéo thả thanh chia Desktop
   const handlePointerDown = (e: React.PointerEvent) => {
     e.currentTarget.setPointerCapture(e.pointerId);
     setIsDragging(true);
@@ -225,7 +223,7 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Màn hình chờ tải đề thi & thời gian chính xác
+  // Màn hình chờ tải đề thi hoàn tất
   if (!exam) {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#FAFAFA] space-y-3 font-sans">
@@ -283,6 +281,8 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
               <div className="flex items-center space-x-1.5 text-[10px] md:text-[11px] text-gray-500">
                 <span className="font-semibold text-gray-800">{studentName}</span>
                 <span>({className})</span>
+                <span>•</span>
+                <span className="text-gray-400">Giao bởi: {exam?.teacher_name || 'GV'}</span>
               </div>
             </div>
           </div>
@@ -296,7 +296,7 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
             </div>
           )}
 
-          {/* Đồng hồ đếm ngược: Hiển thị đúng số phút từ đề thi */}
+          {/* Đồng hồ đếm ngược: Đếm đúng số phút giáo viên cài đặt */}
           {!isSubmitted ? (
             <div className={`flex items-center space-x-1.5 px-2.5 md:px-3 py-1 md:py-1.5 rounded-full font-mono font-bold text-xs md:text-sm tracking-wider ${
               timeLeft < 300 
@@ -307,7 +307,7 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
               <span>{formatTimer(timeLeft)}</span>
             </div>
           ) : (
-            <div className="flex items-center space-x-1.5 bg-gray-100 text-gray-700 px-2.5 py-1 rounded-full font-bold text-xs">
+            <div className="flex items-center space-x-1.5 bg-gray-100 text-gray-700 px-3 py-1.5 rounded-full font-bold text-xs">
               <CheckCircle2 className="w-4 h-4 text-[#1DB954]" />
               <span>Đã hoàn thành</span>
             </div>
@@ -328,7 +328,7 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
             </button>
           ) : (
             <div className="flex items-center space-x-1.5 bg-[#E7F7ED] text-[#15803D] border border-[#A7E6BE] px-3 py-1 rounded-full font-extrabold text-xs md:text-sm flex-shrink-0">
-              <Award className="w-3.5 h-3.5 text-[#1DB954]" />
+              <Award className="w-4 h-4 text-[#1DB954]" />
               <span>{result?.score} / 10đ</span>
             </div>
           )}
@@ -453,7 +453,7 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
               </div>
             )}
 
-            {/* ======================= PHẦN I ======================= */}
+            {/* PHẦN I */}
             {p1Count > 0 && (
               <section className="bg-white border border-[#EAEAEA] rounded-3xl p-4 md:p-5 shadow-sm">
                 <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
@@ -516,7 +516,7 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
               </section>
             )}
 
-            {/* ======================= PHẦN II ======================= */}
+            {/* PHẦN II */}
             {p2Count > 0 && (
               <section className="bg-white border border-[#EAEAEA] rounded-3xl p-4 md:p-5 shadow-sm">
                 <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
@@ -611,7 +611,7 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
               </section>
             )}
 
-            {/* ======================= PHẦN III ======================= */}
+            {/* PHẦN III */}
             {p3Count > 0 && (
               <section className="bg-white border border-[#EAEAEA] rounded-3xl p-4 md:p-5 shadow-sm">
                 <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
@@ -652,19 +652,19 @@ export const StudentExamRoom: React.FC<StudentExamRoomProps> = ({
                               isSubmitted 
                                 ? (qDetail?.is_correct ? 'border-[#1DB954] bg-emerald-50 font-bold' : 'border-rose-300 bg-rose-50')
                                 : 'border-gray-200 focus:border-[#1DB954] bg-white'
-                          }`}
-                        />
-                        {isSubmitted && (
-                          <span className="text-xs font-mono font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-lg whitespace-nowrap">
-                            ĐS: {correctKey || '--'}
-                          </span>
-                        )}
+                            }`}
+                          />
+                          {isSubmitted && (
+                            <span className="text-xs font-mono font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-lg whitespace-nowrap">
+                              ĐS: {correctKey || '--'}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
+                    );
+                  })}
+                </div>
+              </section>
             )}
 
           </div>

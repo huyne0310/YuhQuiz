@@ -6,64 +6,60 @@ export function useExamTimer(
   onTimeOut: () => void,
   isSubmitted: boolean = false
 ) {
-  const [secondsRemaining, setSecondsRemaining] = useState<number>(() => {
-    if (!durationMinutes || durationMinutes <= 0) return 0;
-    const expireKey = `expire_${sessionKey}_${durationMinutes}`;
-    const savedExpire = localStorage.getItem(expireKey);
-    if (savedExpire) {
-      const remaining = Math.floor((parseInt(savedExpire, 10) - Date.now()) / 1000);
-      return remaining > 0 ? remaining : 0;
-    }
-    const newExpire = Date.now() + durationMinutes * 60 * 1000;
-    localStorage.setItem(expireKey, newExpire.toString());
-    return durationMinutes * 60;
-  });
-
+  const [secondsRemaining, setSecondsRemaining] = useState<number | null>(null);
   const onTimeOutRef = useRef(onTimeOut);
   onTimeOutRef.current = onTimeOut;
-
-  // Tự động đồng bộ đúng số phút khi đề thi tải xong từ Database
-  useEffect(() => {
-    if (!durationMinutes || durationMinutes <= 0 || isSubmitted) return;
-
-    const expireKey = `expire_${sessionKey}_${durationMinutes}`;
-    const savedExpire = localStorage.getItem(expireKey);
-
-    if (savedExpire) {
-      const remaining = Math.floor((parseInt(savedExpire, 10) - Date.now()) / 1000);
-      setSecondsRemaining(remaining > 0 ? remaining : 0);
-    } else {
-      const newExpire = Date.now() + durationMinutes * 60 * 1000;
-      localStorage.setItem(expireKey, newExpire.toString());
-      setSecondsRemaining(durationMinutes * 60);
-    }
-  }, [durationMinutes, sessionKey, isSubmitted]);
+  const isStartedRef = useRef(false);
 
   useEffect(() => {
-    if (isSubmitted || !durationMinutes || durationMinutes <= 0) return;
-
-    if (secondsRemaining <= 0) {
-      onTimeOutRef.current();
+    // Nếu đã nộp bài hoặc chưa tải xong thời gian làm bài (> 0 phút) thì không đếm
+    if (isSubmitted || !durationMinutes || durationMinutes <= 0) {
       return;
     }
 
-    const interval = setInterval(() => {
-      const expireKey = `expire_${sessionKey}_${durationMinutes}`;
-      const savedExpire = localStorage.getItem(expireKey);
-      if (!savedExpire) return;
+    const expireKey = `exam_expire_${sessionKey}_${durationMinutes}`;
+    let expireTimestamp = localStorage.getItem(expireKey);
 
-      const diff = Math.floor((parseInt(savedExpire, 10) - Date.now()) / 1000);
+    if (!expireTimestamp) {
+      // Lần đầu vào thi: Thiết lập mốc hết hạn theo ĐÚNG số phút của đề thi giáo viên giao
+      const targetTime = Date.now() + durationMinutes * 60 * 1000;
+      localStorage.setItem(expireKey, targetTime.toString());
+      expireTimestamp = targetTime.toString();
+    }
+
+    const targetMs = parseInt(expireTimestamp, 10);
+    const initialDiff = Math.floor((targetMs - Date.now()) / 1000);
+
+    // Nếu thời gian đã hết từ trước
+    if (initialDiff <= 0) {
+      setSecondsRemaining(0);
+      if (isStartedRef.current) {
+        onTimeOutRef.current();
+      }
+      return;
+    }
+
+    setSecondsRemaining(initialDiff);
+    isStartedRef.current = true;
+
+    // Đếm ngược mỗi giây
+    const interval = setInterval(() => {
+      const diff = Math.floor((targetMs - Date.now()) / 1000);
       if (diff <= 0) {
         setSecondsRemaining(0);
         clearInterval(interval);
-        onTimeOutRef.current();
+        onTimeOutRef.current(); // Chỉ gọi khi thực sự đếm về 0
       } else {
         setSecondsRemaining(diff);
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [sessionKey, secondsRemaining, isSubmitted, durationMinutes]);
+  }, [durationMinutes, sessionKey, isSubmitted]);
 
-  return secondsRemaining;
+  // Trả về số giây còn lại, hoặc mặc định theo số phút của đề thi nếu chưa khởi tạo xong
+  if (secondsRemaining !== null) {
+    return secondsRemaining;
+  }
+  return durationMinutes > 0 ? durationMinutes * 60 : 0;
 }
