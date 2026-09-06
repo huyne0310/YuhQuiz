@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Menu, BookOpen, User, ShieldCheck, ArrowRight, Sparkles, GraduationCap, 
+  Menu, 
+  BookOpen, User, ShieldCheck, ArrowRight, Sparkles, GraduationCap, 
   LogIn, Users, Plus, LogOut, Award, CheckCircle2, LayoutDashboard, 
   ChevronRight, ArrowUpRight 
 } from 'lucide-react';
@@ -68,6 +69,7 @@ export function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [showCompleteProfile, setShowCompleteProfile] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
   // 1. Tải danh sách đề thi công khai (CHỈ ĐỀ CÔNG KHAI MỚI HIỆN CHO KHÁCH)
   const loadExams = async () => {
     try {
@@ -264,7 +266,7 @@ export function App() {
 
   // 4. TRANG CHỦ LỰA CHỌN (GIAO DIỆN CHUẨN THƯƠNG HIỆU YUHQUIZ VỚI NÚT ACTION RÕ RÀNG THEO CHUẨN UX/UI)
   return (
-    <div className="min-h-screen bg-[#FAFAFA] text-[#121212] flex flex-col justify-between font-sans">
+    <div className="min-h-screen bg-[#FAFAFA] text-[#121212] flex flex-col justify-between font-sans overflow-x-hidden w-full max-w-full">
       
       {/* NAVBAR */}
       {/* NAVBAR VỚI HAMBURGER MENU DROPDOWN CHUẨN UX/UI MOBILE */}
@@ -482,111 +484,124 @@ export function App() {
         )}
       </nav>
 
-      {/* HERO & VÀO PHÒNG THI (CẬP NHẬT CHUẨN XÁC 100% THEO ẢNH YÊU CẦU CỦA BẠN) */}
-      <main className="max-w-4xl mx-auto px-4 md:px-6 py-6 md:py-10 flex flex-col items-center text-center w-full">
-        {/* HUY HIỆU CHÀO MỪNG CHUẨN */}
-        <div className="inline-flex items-center space-x-2 bg-emerald-50 text-[#15803D] border border-emerald-200 px-4 py-1.5 rounded-full text-xs font-bold mb-4 md:mb-6 shadow-2xs">
-          <Sparkles className="w-3.5 h-3.5 text-[#1DB954]" />
-          <span>Chào mừng đến với YuhQuiz – Nền tảng khảo thí trực tuyến dành cho học sinh THPT</span>
+      {/* HERO & VÀO PHÒNG THI (TỰ ĐỘNG THÍCH ỨNG & BIẾN THIÊN THEO MỌI TỶ LỆ MÀN HÌNH) */}
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 flex flex-col items-center text-center w-full overflow-hidden">
+        
+        {/* HUY HIỆU CHÀO MỪNG BIẾN THIÊN TỰ ĐỘNG THEO CHIỀU RỘNG MÀN HÌNH */}
+        <div className="inline-flex items-center space-x-1.5 sm:space-x-2 bg-emerald-50 text-[#15803D] border border-emerald-200 px-3.5 py-1.5 rounded-full text-[11px] sm:text-xs font-bold mb-4 sm:mb-6 shadow-2xs max-w-full text-center">
+          <Sparkles className="w-3.5 h-3.5 text-[#1DB954] flex-shrink-0" />
+          <span className="leading-snug break-words">
+            Chào mừng đến với YuhQuiz – Nền tảng khảo thí trực tuyến dành cho học sinh THPT
+          </span>
         </div>
 
-        {/* TIÊU ĐỀ CHÍNH CHUẨN */}
-        <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold text-gray-950 tracking-tight max-w-3xl leading-tight">
+        {/* TIÊU ĐỀ CHÍNH BIẾN THIÊN MƯỢT MÀ */}
+        <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold text-gray-950 tracking-tight max-w-2xl leading-tight break-words px-1">
           Nền tảng khảo thí trực tuyến nhanh gọn và tiện ích dành cho học sinh THPT
         </h1>
         
-        {/* MÔ TẢ PHỤ CHUẨN */}
-        <p className="text-xs sm:text-sm md:text-base text-gray-500 mt-3 max-w-2xl leading-relaxed">
+        {/* MÔ TẢ PHỤ */}
+        <p className="text-xs sm:text-sm md:text-base text-gray-500 mt-2.5 sm:mt-3 max-w-xl leading-relaxed px-2 break-words">
           Cung cấp giải pháp tổ chức thi và thi thử toàn diện, đáp ứng linh hoạt nhu cầu đánh giá năng lực.
         </p>
 
-        {/* HERO CALL-TO-ACTION CARD LỚN TRỰC QUAN */}
+        {/* 1. THẺ HỌC SINH ĐÃ ĐĂNG NHẬP */}
         {currentUser && userProfile?.role === 'student' && (
-          <div className="w-full max-w-xl mt-8 bg-gradient-to-r from-emerald-50/90 via-green-50/80 to-teal-50/90 border-2 border-[#1DB954] rounded-3xl p-5 shadow-lg shadow-emerald-500/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-left animate-in fade-in duration-300">
-            <div className="flex items-center space-x-3.5">
+          <div className="w-full max-w-lg mt-6 bg-gradient-to-r from-emerald-50/90 via-green-50/80 to-teal-50/90 border-2 border-[#1DB954] rounded-3xl p-4 sm:p-5 shadow-lg shadow-emerald-500/10 flex flex-col sm:flex-row items-center sm:justify-between gap-3.5 text-center sm:text-left animate-in fade-in duration-300">
+            <div className="flex items-center space-x-3 text-left w-full sm:w-auto">
               <div className="w-12 h-12 rounded-2xl bg-[#1DB954] text-white flex items-center justify-center shadow-md flex-shrink-0">
                 <GraduationCap className="w-6 h-6" />
               </div>
-              <div>
+              <div className="overflow-hidden">
                 <span className="text-[10px] font-extrabold text-[#15803D] uppercase tracking-wider block">
                   Không Gian Thí Sinh
                 </span>
-                <h3 className="font-extrabold text-base text-gray-900 leading-tight">
+                <h3 className="font-extrabold text-base text-gray-900 leading-tight truncate">
                   Chào mừng, {userProfile?.full_name || 'Học sinh'}!
                 </h3>
-                <p className="text-[11px] text-gray-500 mt-0.5">
+                <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
                   Lớp học, bài tập được giao & biểu đồ tiến độ điểm số cá nhân
                 </p>
               </div>
             </div>
 
-            <button
-              onClick={() => setMode('student_portal')}
-              className="w-full sm:w-auto bg-[#1DB954] hover:bg-[#169C46] active:scale-95 text-white px-5 py-3 rounded-2xl font-extrabold text-xs shadow-md shadow-emerald-500/25 flex items-center justify-center space-x-2 transition-all flex-shrink-0"
-            >
-              <span>VÀO GÓC HỌC TẬP</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            <div className="w-full sm:w-auto flex justify-center sm:justify-end flex-shrink-0 pt-1 sm:pt-0">
+              <button
+                onClick={() => setMode('student_portal')}
+                className="w-full sm:w-auto bg-[#1DB954] hover:bg-[#169C46] active:scale-95 text-white px-5 py-2.5 rounded-2xl font-extrabold text-xs shadow-md shadow-emerald-500/25 flex items-center justify-center space-x-2 transition-all whitespace-nowrap"
+              >
+                <span>VÀO GÓC HỌC TẬP</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         )}
 
+        {/* 2. THẺ GIÁO VIÊN ĐÃ ĐĂNG NHẬP */}
         {currentUser && userProfile?.role === 'teacher' && (
-          <div className="w-full max-w-xl mt-8 bg-gradient-to-r from-emerald-50/90 via-green-50/80 to-teal-50/90 border-2 border-[#1DB954] rounded-3xl p-5 shadow-lg shadow-emerald-500/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-left animate-in fade-in duration-300">
-            <div className="flex items-center space-x-3.5">
+          <div className="w-full max-w-lg mt-6 bg-gradient-to-r from-emerald-50/90 via-green-50/80 to-teal-50/90 border-2 border-[#1DB954] rounded-3xl p-4 sm:p-5 shadow-lg shadow-emerald-500/10 flex flex-col sm:flex-row items-center sm:justify-between gap-3.5 text-center sm:text-left animate-in fade-in duration-300">
+            <div className="flex items-center space-x-3 text-left w-full sm:w-auto">
               <div className="w-12 h-12 rounded-2xl bg-[#1DB954] text-white flex items-center justify-center shadow-md flex-shrink-0">
                 <ShieldCheck className="w-6 h-6" />
               </div>
-              <div>
+              <div className="overflow-hidden">
                 <span className="text-[10px] font-extrabold text-[#15803D] uppercase tracking-wider block">
                   Không Gian Giảng Dạy
                 </span>
-                <h3 className="font-extrabold text-base text-gray-900 leading-tight">
+                <h3 className="font-extrabold text-base text-gray-900 leading-tight truncate">
                   Kính chào, {userProfile?.full_name || 'Thầy/Cô'}!
                 </h3>
-                <p className="text-[11px] text-gray-500 mt-0.5">
+                <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
                   Quản lý lớp, tạo đề thi, chấm lại bài & phân tích phổ điểm
                 </p>
               </div>
             </div>
 
-            <button
-              onClick={() => setMode('teacher')}
-              className="w-full sm:w-auto bg-[#1DB954] hover:bg-[#169C46] active:scale-95 text-white px-5 py-3 rounded-2xl font-extrabold text-xs shadow-md shadow-emerald-500/25 flex items-center justify-center space-x-2 transition-all flex-shrink-0"
-            >
-              <span>VÀO TRUNG TÂM QUẢN TRỊ</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            <div className="w-full sm:w-auto flex justify-center sm:justify-end flex-shrink-0 pt-1 sm:pt-0">
+              <button
+                onClick={() => setMode('teacher')}
+                className="w-full sm:w-auto bg-[#1DB954] hover:bg-[#169C46] active:scale-95 text-white px-5 py-2.5 rounded-2xl font-extrabold text-xs shadow-md shadow-emerald-500/25 flex items-center justify-center space-x-2 transition-all whitespace-nowrap"
+              >
+                <span>VÀO TRUNG TÂM QUẢN TRỊ</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         )}
 
+        {/* 3. THẺ CHƯA ĐĂNG NHẬP: BIẾN THIÊN TỰ ĐỘNG, NÚT ĐĂNG NHẬP Ở DÒNG RIÊNG DƯỚI CĂN GIỮA TRÊN MOBILE */}
         {!currentUser && (
-          <div className="w-full max-w-xl mt-8 bg-white border border-gray-200 rounded-3xl p-4 shadow-xs flex items-center justify-between text-left">
-            <div className="flex items-center space-x-2 sm:space-x-3 flex-shrink-0">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-[#1DB954] flex items-center justify-center flex-shrink-0">
+          <div className="w-full max-w-lg mt-6 bg-white border border-gray-200 rounded-3xl p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row items-center sm:justify-between gap-3.5 text-center sm:text-left">
+            <div className="flex items-center space-x-3 text-left w-full sm:w-auto">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-[#1DB954] flex items-center justify-center flex-shrink-0 shadow-2xs">
                 <Sparkles className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="font-bold text-xs text-gray-900">
+                <h4 className="font-extrabold text-xs sm:text-sm text-gray-900 leading-snug">
                   Bạn là Học sinh hoặc Giáo viên?
                 </h4>
-                <p className="text-[11px] text-gray-400">
+                <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5 leading-relaxed">
                   Đăng nhập để nhận đề theo lớp và lưu bảng điểm lịch sử
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => setIsAuthModalOpen(true)}
-              className="bg-[#1DB954] hover:bg-[#169C46] text-white px-4 py-2 rounded-xl font-bold text-xs shadow-xs transition-all flex-shrink-0 ml-2"
-            >
-              Đăng nhập ngay
-            </button>
+
+            {/* DÒNG NÚT ĐĂNG NHẬP RIÊNG Ở DƯỚI CĂN GIỮA TRÊN MOBILE (HOẶC NẰM NGANG TRÊN MÁY TÍNH) */}
+            <div className="w-full sm:w-auto flex justify-center sm:justify-end flex-shrink-0 pt-1 sm:pt-0">
+              <button
+                onClick={() => setIsAuthModalOpen(true)}
+                className="w-full sm:w-auto bg-[#1DB954] hover:bg-[#169C46] active:scale-95 text-white px-6 py-2.5 rounded-2xl font-extrabold text-xs shadow-md shadow-emerald-500/20 transition-all text-center whitespace-nowrap"
+              >
+                Đăng nhập ngay
+              </button>
+            </div>
           </div>
         )}
 
         {/* FORM THÍ SINH VÀO THI NHANH (CHỈ CHỨA ĐỀ CÔNG KHAI) */}
-        <div className="w-full max-w-lg bg-white border border-gray-200 rounded-3xl p-6 md:p-8 mt-6 shadow-xl shadow-gray-100/50 text-left">
+        <div className="w-full max-w-lg bg-white border border-gray-200 rounded-3xl p-5 sm:p-7 md:p-8 mt-6 shadow-xl shadow-gray-100/50 text-left">
           <form onSubmit={handleStartExam} className="space-y-4 text-xs">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="font-bold text-gray-700 block mb-1.5">Họ và tên thí sinh *</label>
                 <input
